@@ -1286,6 +1286,17 @@ export function ChatScreen({
             window.clearTimeout(failsafeTimerRef.current)
             failsafeTimerRef.current = null
           }
+          // Message successfully delivered to gateway — mark as queued so
+          // isStuckSending doesn't fire a false "Retry" while waiting for response.
+          if (optimisticClientId) {
+            updateHistoryMessageByClientId(
+              queryClient,
+              friendlyId,
+              sessionKey,
+              optimisticClientId,
+              (message) => ({ ...message, status: 'queued' }),
+            )
+          }
           setSending(false)
         })
         .catch((err: unknown) => {

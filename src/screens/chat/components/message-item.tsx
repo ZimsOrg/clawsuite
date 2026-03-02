@@ -646,12 +646,14 @@ function MessageItemComponent({
     }
   }, [expandAllToolSections])
 
-  // Never show "Queued" — messages are sent instantly to the gateway.
-  // The old "sending" status was misleading since the API call takes <100ms.
-  const isQueued = false
+  // 'queued' = delivered to gateway, waiting for response (busy/backlogged)
+  // 'sending' = still in flight to the gateway API (should clear in <1s)
+  // 'error'   = gateway rejected or network failed → show retry
+  const isQueued = message.status === 'queued'
   const isFailed = message.status === 'error'
 
-  // Detect messages stuck in "sending" state for >30 seconds so we can show retry
+  // Only show retry for messages genuinely stuck in 'sending' (API call hasn't
+  // returned yet after 30s). 'queued' messages are delivered — never show retry.
   const [isStuckSending, setIsStuckSending] = useState(false)
   useEffect(() => {
     if (!isUser || message.status !== 'sending') {
@@ -931,6 +933,10 @@ function MessageItemComponent({
                   <span>Working...</span>
                 </div>
               ) : null}
+              {/* Queued indicator — message delivered, waiting for response */}
+              {isUser && isQueued && (
+                <span className="text-[10px] text-white/60 self-end">Queued</span>
+              )}
 
               {effectiveIsStreaming && !hasRevealedText && (
                 <div className="flex items-center gap-1 px-1 py-0.5">
