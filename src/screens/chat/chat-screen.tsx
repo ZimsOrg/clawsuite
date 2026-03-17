@@ -963,7 +963,7 @@ export function ChatScreen({
     friendlyId: activeFriendlyId,
     sessionKey: resolvedSessionKey,
     activeSession,
-    messages: historyMessages,
+    messages: realtimeMessages,
     messageCount,
     enabled:
       !isNewChat && Boolean(resolvedSessionKey) && historyQuery.isSuccess,
