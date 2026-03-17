@@ -33,6 +33,7 @@ import { Route as CronRouteImport } from './routes/cron'
 import { Route as CostsRouteImport } from './routes/costs'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as AgentsRouteImport } from './routes/agents'
+import { Route as AgentSwarmRouteImport } from './routes/agent-swarm'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
@@ -281,6 +282,11 @@ const ConnectRoute = ConnectRouteImport.update({
 const AgentsRoute = AgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentSwarmRoute = AgentSwarmRouteImport.update({
+  id: '/agent-swarm',
+  path: '/agent-swarm',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SplatRoute = SplatRouteImport.update({
@@ -956,6 +962,7 @@ const ApiGatewayApprovalsApprovalIdActionRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/agent-swarm': typeof AgentSwarmRoute
   '/agents': typeof AgentsRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
@@ -1111,6 +1118,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/agent-swarm': typeof AgentSwarmRoute
   '/agents': typeof AgentsRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
@@ -1266,6 +1274,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/agent-swarm': typeof AgentSwarmRoute
   '/agents': typeof AgentsRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
@@ -1423,6 +1432,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/agent-swarm'
     | '/agents'
     | '/connect'
     | '/costs'
@@ -1578,6 +1588,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/agent-swarm'
     | '/agents'
     | '/connect'
     | '/costs'
@@ -1732,6 +1743,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/agent-swarm'
     | '/agents'
     | '/connect'
     | '/costs'
@@ -1888,6 +1900,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  AgentSwarmRoute: typeof AgentSwarmRoute
   AgentsRoute: typeof AgentsRoute
   ConnectRoute: typeof ConnectRoute
   CostsRoute: typeof CostsRoute
@@ -2154,6 +2167,13 @@ declare module '@tanstack/react-router' {
       path: '/agents'
       fullPath: '/agents'
       preLoaderRoute: typeof AgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent-swarm': {
+      id: '/agent-swarm'
+      path: '/agent-swarm'
+      fullPath: '/agent-swarm'
+      preLoaderRoute: typeof AgentSwarmRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$': {
@@ -3346,6 +3366,7 @@ const ApiWorkspaceTasksRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  AgentSwarmRoute: AgentSwarmRoute,
   AgentsRoute: AgentsRoute,
   ConnectRoute: ConnectRoute,
   CostsRoute: CostsRoute,
