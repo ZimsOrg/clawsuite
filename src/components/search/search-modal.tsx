@@ -143,7 +143,7 @@ export function SearchModal() {
         description: 'Open cron job manager and run history',
         onSelect: () => {
           closeModal()
-          navigate({ to: '/dashboard' })
+          navigate({ to: '/cron' })
         },
       },
       {
@@ -275,7 +275,7 @@ export function SearchModal() {
       badge: entry.level,
       onSelect: () => {
         closeModal()
-        navigate({ to: '/dashboard' })
+        navigate({ to: '/activity' })
       },
     }))
 

@@ -1,17 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { TasksScreen } from '@/screens/tasks/tasks-screen'
 import { usePageTitle } from '@/hooks/use-page-title'
-import { AgentsScreen } from '@/screens/gateway/agents-screen'
 
-export const Route = createFileRoute('/agent-swarm')({
-  component: function AgentSwarmRoute() {
-    usePageTitle('Agent Hub')
-    return <AgentsScreen />
+export const Route = createFileRoute('/tasks')({
+  component: function TasksRoute() {
+    usePageTitle('Tasks')
+    return <TasksScreen />
   },
-  errorComponent: function AgentSwarmError({ error }) {
+  errorComponent: function TasksError({ error }) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center bg-primary-50">
         <h2 className="text-xl font-semibold text-primary-900 mb-3">
-          Failed to Load Agent Hub
+          Failed to Load Tasks
         </h2>
         <p className="text-sm text-primary-600 mb-4 max-w-md">
           {error instanceof Error
@@ -27,12 +27,12 @@ export const Route = createFileRoute('/agent-swarm')({
       </div>
     )
   },
-  pendingComponent: function AgentSwarmPending() {
+  pendingComponent: function TasksPending() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-accent-500 border-r-transparent mb-3" />
-          <p className="text-sm text-primary-500">Loading Agent Hub...</p>
+          <p className="text-sm text-primary-500">Loading tasks...</p>
         </div>
       </div>
     )

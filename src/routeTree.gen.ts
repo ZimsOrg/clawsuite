@@ -16,15 +16,21 @@ import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as WizardRouteImport } from './routes/wizard'
 import { Route as UsageRouteImport } from './routes/usage'
 import { Route as TerminalRouteImport } from './routes/terminal'
+import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as PlanReviewRouteImport } from './routes/plan-review'
+import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as NewProjectRouteImport } from './routes/new-project'
 import { Route as NewRouteImport } from './routes/new'
+import { Route as MissionConsoleRouteImport } from './routes/mission-console'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as InstancesRouteImport } from './routes/instances'
 import { Route as GatewayRouteImport } from './routes/gateway'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as DebugRouteImport } from './routes/debug'
@@ -32,8 +38,11 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CronRouteImport } from './routes/cron'
 import { Route as CostsRouteImport } from './routes/costs'
 import { Route as ConnectRouteImport } from './routes/connect'
+import { Route as ChannelsRouteImport } from './routes/channels'
+import { Route as BrowserRouteImport } from './routes/browser'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as AgentSwarmRouteImport } from './routes/agent-swarm'
+import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
@@ -199,6 +208,11 @@ const TerminalRoute = TerminalRouteImport.update({
   path: '/terminal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TasksRoute = TasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SkillsRoute = SkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
@@ -214,6 +228,11 @@ const SessionsRoute = SessionsRouteImport.update({
   path: '/sessions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReviewRoute = ReviewRouteImport.update({
   id: '/review',
   path: '/review',
@@ -222,6 +241,16 @@ const ReviewRoute = ReviewRouteImport.update({
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanReviewRoute = PlanReviewRouteImport.update({
+  id: '/plan-review',
+  path: '/plan-review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NodesRoute = NodesRouteImport.update({
+  id: '/nodes',
+  path: '/nodes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NewProjectRoute = NewProjectRouteImport.update({
@@ -234,6 +263,11 @@ const NewRoute = NewRouteImport.update({
   path: '/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MissionConsoleRoute = MissionConsoleRouteImport.update({
+  id: '/mission-console',
+  path: '/mission-console',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MemoryRoute = MemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
@@ -242,6 +276,11 @@ const MemoryRoute = MemoryRouteImport.update({
 const LogsRoute = LogsRouteImport.update({
   id: '/logs',
   path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstancesRoute = InstancesRouteImport.update({
+  id: '/instances',
+  path: '/instances',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GatewayRoute = GatewayRouteImport.update({
@@ -279,6 +318,16 @@ const ConnectRoute = ConnectRouteImport.update({
   path: '/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChannelsRoute = ChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrowserRoute = BrowserRouteImport.update({
+  id: '/browser',
+  path: '/browser',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentsRoute = AgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
@@ -287,6 +336,11 @@ const AgentsRoute = AgentsRouteImport.update({
 const AgentSwarmRoute = AgentSwarmRouteImport.update({
   id: '/agent-swarm',
   path: '/agent-swarm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SplatRoute = SplatRouteImport.update({
@@ -962,8 +1016,11 @@ const ApiGatewayApprovalsApprovalIdActionRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/activity': typeof ActivityRoute
   '/agent-swarm': typeof AgentSwarmRoute
   '/agents': typeof AgentsRoute
+  '/browser': typeof BrowserRoute
+  '/channels': typeof ChannelsRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
   '/cron': typeof CronRoute
@@ -971,15 +1028,21 @@ export interface FileRoutesByFullPath {
   '/debug': typeof DebugRoute
   '/files': typeof FilesRoute
   '/gateway': typeof GatewayRouteWithChildren
+  '/instances': typeof InstancesRoute
   '/logs': typeof LogsRoute
   '/memory': typeof MemoryRoute
+  '/mission-console': typeof MissionConsoleRoute
   '/new': typeof NewRoute
   '/new-project': typeof NewProjectRoute
+  '/nodes': typeof NodesRoute
+  '/plan-review': typeof PlanReviewRoute
   '/projects': typeof ProjectsRoute
   '/review': typeof ReviewRoute
+  '/runs': typeof RunsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/skills': typeof SkillsRoute
+  '/tasks': typeof TasksRoute
   '/terminal': typeof TerminalRoute
   '/usage': typeof UsageRoute
   '/wizard': typeof WizardRoute
@@ -1118,8 +1181,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/activity': typeof ActivityRoute
   '/agent-swarm': typeof AgentSwarmRoute
   '/agents': typeof AgentsRoute
+  '/browser': typeof BrowserRoute
+  '/channels': typeof ChannelsRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
   '/cron': typeof CronRoute
@@ -1127,14 +1193,20 @@ export interface FileRoutesByTo {
   '/debug': typeof DebugRoute
   '/files': typeof FilesRoute
   '/gateway': typeof GatewayRouteWithChildren
+  '/instances': typeof InstancesRoute
   '/logs': typeof LogsRoute
   '/memory': typeof MemoryRoute
+  '/mission-console': typeof MissionConsoleRoute
   '/new': typeof NewRoute
   '/new-project': typeof NewProjectRoute
+  '/nodes': typeof NodesRoute
+  '/plan-review': typeof PlanReviewRoute
   '/projects': typeof ProjectsRoute
   '/review': typeof ReviewRoute
+  '/runs': typeof RunsRoute
   '/sessions': typeof SessionsRoute
   '/skills': typeof SkillsRoute
+  '/tasks': typeof TasksRoute
   '/terminal': typeof TerminalRoute
   '/usage': typeof UsageRoute
   '/wizard': typeof WizardRoute
@@ -1274,8 +1346,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/activity': typeof ActivityRoute
   '/agent-swarm': typeof AgentSwarmRoute
   '/agents': typeof AgentsRoute
+  '/browser': typeof BrowserRoute
+  '/channels': typeof ChannelsRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
   '/cron': typeof CronRoute
@@ -1283,15 +1358,21 @@ export interface FileRoutesById {
   '/debug': typeof DebugRoute
   '/files': typeof FilesRoute
   '/gateway': typeof GatewayRouteWithChildren
+  '/instances': typeof InstancesRoute
   '/logs': typeof LogsRoute
   '/memory': typeof MemoryRoute
+  '/mission-console': typeof MissionConsoleRoute
   '/new': typeof NewRoute
   '/new-project': typeof NewProjectRoute
+  '/nodes': typeof NodesRoute
+  '/plan-review': typeof PlanReviewRoute
   '/projects': typeof ProjectsRoute
   '/review': typeof ReviewRoute
+  '/runs': typeof RunsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/skills': typeof SkillsRoute
+  '/tasks': typeof TasksRoute
   '/terminal': typeof TerminalRoute
   '/usage': typeof UsageRoute
   '/wizard': typeof WizardRoute
@@ -1432,8 +1513,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/activity'
     | '/agent-swarm'
     | '/agents'
+    | '/browser'
+    | '/channels'
     | '/connect'
     | '/costs'
     | '/cron'
@@ -1441,15 +1525,21 @@ export interface FileRouteTypes {
     | '/debug'
     | '/files'
     | '/gateway'
+    | '/instances'
     | '/logs'
     | '/memory'
+    | '/mission-console'
     | '/new'
     | '/new-project'
+    | '/nodes'
+    | '/plan-review'
     | '/projects'
     | '/review'
+    | '/runs'
     | '/sessions'
     | '/settings'
     | '/skills'
+    | '/tasks'
     | '/terminal'
     | '/usage'
     | '/wizard'
@@ -1588,8 +1678,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/activity'
     | '/agent-swarm'
     | '/agents'
+    | '/browser'
+    | '/channels'
     | '/connect'
     | '/costs'
     | '/cron'
@@ -1597,14 +1690,20 @@ export interface FileRouteTypes {
     | '/debug'
     | '/files'
     | '/gateway'
+    | '/instances'
     | '/logs'
     | '/memory'
+    | '/mission-console'
     | '/new'
     | '/new-project'
+    | '/nodes'
+    | '/plan-review'
     | '/projects'
     | '/review'
+    | '/runs'
     | '/sessions'
     | '/skills'
+    | '/tasks'
     | '/terminal'
     | '/usage'
     | '/wizard'
@@ -1743,8 +1842,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/activity'
     | '/agent-swarm'
     | '/agents'
+    | '/browser'
+    | '/channels'
     | '/connect'
     | '/costs'
     | '/cron'
@@ -1752,15 +1854,21 @@ export interface FileRouteTypes {
     | '/debug'
     | '/files'
     | '/gateway'
+    | '/instances'
     | '/logs'
     | '/memory'
+    | '/mission-console'
     | '/new'
     | '/new-project'
+    | '/nodes'
+    | '/plan-review'
     | '/projects'
     | '/review'
+    | '/runs'
     | '/sessions'
     | '/settings'
     | '/skills'
+    | '/tasks'
     | '/terminal'
     | '/usage'
     | '/wizard'
@@ -1900,8 +2008,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  ActivityRoute: typeof ActivityRoute
   AgentSwarmRoute: typeof AgentSwarmRoute
   AgentsRoute: typeof AgentsRoute
+  BrowserRoute: typeof BrowserRoute
+  ChannelsRoute: typeof ChannelsRoute
   ConnectRoute: typeof ConnectRoute
   CostsRoute: typeof CostsRoute
   CronRoute: typeof CronRoute
@@ -1909,15 +2020,21 @@ export interface RootRouteChildren {
   DebugRoute: typeof DebugRoute
   FilesRoute: typeof FilesRoute
   GatewayRoute: typeof GatewayRouteWithChildren
+  InstancesRoute: typeof InstancesRoute
   LogsRoute: typeof LogsRoute
   MemoryRoute: typeof MemoryRoute
+  MissionConsoleRoute: typeof MissionConsoleRoute
   NewRoute: typeof NewRoute
   NewProjectRoute: typeof NewProjectRoute
+  NodesRoute: typeof NodesRoute
+  PlanReviewRoute: typeof PlanReviewRoute
   ProjectsRoute: typeof ProjectsRoute
   ReviewRoute: typeof ReviewRoute
+  RunsRoute: typeof RunsRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   SkillsRoute: typeof SkillsRoute
+  TasksRoute: typeof TasksRoute
   TerminalRoute: typeof TerminalRoute
   UsageRoute: typeof UsageRoute
   WizardRoute: typeof WizardRoute
@@ -2050,6 +2167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TerminalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tasks': {
+      id: '/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/skills': {
       id: '/skills'
       path: '/skills'
@@ -2071,6 +2195,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SessionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/review': {
       id: '/review'
       path: '/review'
@@ -2083,6 +2214,20 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plan-review': {
+      id: '/plan-review'
+      path: '/plan-review'
+      fullPath: '/plan-review'
+      preLoaderRoute: typeof PlanReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nodes': {
+      id: '/nodes'
+      path: '/nodes'
+      fullPath: '/nodes'
+      preLoaderRoute: typeof NodesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/new-project': {
@@ -2099,6 +2244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mission-console': {
+      id: '/mission-console'
+      path: '/mission-console'
+      fullPath: '/mission-console'
+      preLoaderRoute: typeof MissionConsoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/memory': {
       id: '/memory'
       path: '/memory'
@@ -2111,6 +2263,13 @@ declare module '@tanstack/react-router' {
       path: '/logs'
       fullPath: '/logs'
       preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/instances': {
+      id: '/instances'
+      path: '/instances'
+      fullPath: '/instances'
+      preLoaderRoute: typeof InstancesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gateway': {
@@ -2162,6 +2321,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/channels': {
+      id: '/channels'
+      path: '/channels'
+      fullPath: '/channels'
+      preLoaderRoute: typeof ChannelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/browser': {
+      id: '/browser'
+      path: '/browser'
+      fullPath: '/browser'
+      preLoaderRoute: typeof BrowserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agents': {
       id: '/agents'
       path: '/agents'
@@ -2174,6 +2347,13 @@ declare module '@tanstack/react-router' {
       path: '/agent-swarm'
       fullPath: '/agent-swarm'
       preLoaderRoute: typeof AgentSwarmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$': {
@@ -3366,8 +3546,11 @@ const ApiWorkspaceTasksRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  ActivityRoute: ActivityRoute,
   AgentSwarmRoute: AgentSwarmRoute,
   AgentsRoute: AgentsRoute,
+  BrowserRoute: BrowserRoute,
+  ChannelsRoute: ChannelsRoute,
   ConnectRoute: ConnectRoute,
   CostsRoute: CostsRoute,
   CronRoute: CronRoute,
@@ -3375,15 +3558,21 @@ const rootRouteChildren: RootRouteChildren = {
   DebugRoute: DebugRoute,
   FilesRoute: FilesRoute,
   GatewayRoute: GatewayRouteWithChildren,
+  InstancesRoute: InstancesRoute,
   LogsRoute: LogsRoute,
   MemoryRoute: MemoryRoute,
+  MissionConsoleRoute: MissionConsoleRoute,
   NewRoute: NewRoute,
   NewProjectRoute: NewProjectRoute,
+  NodesRoute: NodesRoute,
+  PlanReviewRoute: PlanReviewRoute,
   ProjectsRoute: ProjectsRoute,
   ReviewRoute: ReviewRoute,
+  RunsRoute: RunsRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRouteWithChildren,
   SkillsRoute: SkillsRoute,
+  TasksRoute: TasksRoute,
   TerminalRoute: TerminalRoute,
   UsageRoute: UsageRoute,
   WizardRoute: WizardRoute,

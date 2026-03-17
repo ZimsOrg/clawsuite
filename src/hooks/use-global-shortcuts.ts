@@ -61,7 +61,7 @@ export function useGlobalShortcuts() {
       // Cmd/Ctrl+Shift+L — Focus activity log
       if (mod && event.shiftKey && event.key.toLowerCase() === 'l') {
         event.preventDefault()
-        void navigate({ to: '/agents' })
+        void navigate({ to: '/activity' })
         return
       }
     }

@@ -449,7 +449,7 @@ export function PlanReviewScreen({
       toast('Mission launched', { type: 'success' })
       if (result?.missionId) {
         void navigate({
-          to: '/dashboard',
+          to: '/mission-console',
           search: {
             missionId: result.missionId,
             projectId: result.projectId ?? '',
@@ -457,7 +457,7 @@ export function PlanReviewScreen({
         })
         return
       }
-      void navigate({ to: '/dashboard' })
+      void navigate({ to: '/runs' })
     },
     onError: (error) => {
       toast(error instanceof Error ? error.message : 'Failed to launch mission', {
@@ -531,7 +531,7 @@ export function PlanReviewScreen({
                 {recentPlanMissions.map((mission) => (
                   <Link
                     key={mission.id}
-                    to="/dashboard"
+                    to="/mission-console"
                     search={{
                       missionId: mission.id,
                       projectId: mission.projectId,

@@ -1,12 +1,13 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { usePageTitle } from '@/hooks/use-page-title'
-import { GatewayLogsScreen } from '@/screens/gateway/logs-screen'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/logs')({
-  component: LogsRoute,
+  beforeLoad: function redirectLegacyLogsRoute() {
+    throw redirect({
+      to: '/activity',
+      replace: true,
+    })
+  },
+  component: function LogsRoute() {
+    return null
+  },
 })
-
-function LogsRoute() {
-  usePageTitle('Gateway Logs')
-  return <GatewayLogsScreen />
-}
