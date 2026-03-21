@@ -264,46 +264,11 @@ export function RunConsole({
     setIsAutoScroll(atBottom)
   }, [])
 
-  // Use live events if available, otherwise fall back to mocks
-  const hasLiveData = sessionKeys?.length && liveEvents.length > 0
-
   const resolvedDuration = duration || formatDuration(startedAt) || '0s'
   const resolvedTokens = typeof tokenCount === 'number' ? tokenCount.toLocaleString() : '0'
   const statusLabel = formatRunStatus(runStatus)
 
-  const mockEvents = useMemo<LiveStreamEvent[]>(() => {
-    const primaryAgent = agents[0]?.name || 'Mission Control'
-    const secondaryAgent = agents[1]?.name || primaryAgent
-    const hasFailure = runStatus === 'failed'
-
-    return [
-      {
-        id: `${runId}-evt-1`,
-        timestamp: '00:00:03',
-        agentName: primaryAgent,
-        eventType: 'status',
-        message: 'Session initialized and task context loaded.',
-      },
-      {
-        id: `${runId}-evt-2`,
-        timestamp: '00:00:11',
-        agentName: secondaryAgent,
-        eventType: 'tool',
-        message: 'Executed repository scan and identified target files.',
-      },
-      {
-        id: `${runId}-evt-3`,
-        timestamp: '00:00:18',
-        agentName: primaryAgent,
-        eventType: hasFailure ? 'error' : 'output',
-        message: hasFailure
-          ? 'Encountered runtime exception while applying patch.'
-          : 'Generated implementation draft and queued validation pass.',
-      },
-    ]
-  }, [agents, runId, runStatus])
-
-  const displayEvents: Array<{ id: string; timestamp: string; agentName: string; eventType: 'status' | 'output' | 'tool' | 'error'; message: string }> = hasLiveData ? liveEvents : mockEvents
+  const displayEvents: Array<{ id: string; timestamp: string; agentName: string; eventType: 'status' | 'output' | 'tool' | 'error'; message: string }> = liveEvents
 
   const timelineBuckets = useMemo(() => {
     if (displayEvents.length === 0) return []
@@ -501,7 +466,7 @@ export function RunConsole({
         {activeTab === 'stream' ? (
           <div className="space-y-3 font-mono text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-primary-200">{hasLiveData ? `${displayEvents.length} events` : 'Live event stream will appear here'}</p>
+              <p className="text-sm font-medium text-primary-200">{displayEvents.length > 0 ? `${displayEvents.length} events` : 'Live event stream will appear here'}</p>
               <div className="inline-flex items-center rounded-md border border-primary-700 bg-primary-900/60 p-0.5 text-xs">
                 <button
                   type="button"

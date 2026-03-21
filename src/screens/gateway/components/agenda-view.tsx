@@ -1,7 +1,3 @@
-// TODO(orphan): AgendaView is built but not imported or used anywhere in the app.
-// It is a companion to CalendarView — together they implement Calendar/Agenda View.
-// To activate: import alongside CalendarView in agent-hub-layout.tsx and add a
-// view-mode toggle to switch between calendar and agenda modes within the same tab.
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { cn } from '@/lib/utils'

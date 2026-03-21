@@ -1,9 +1,3 @@
-// TODO(orphan): RunLearnings component is built but not imported or used anywhere.
-// It is NOT wired into any tab in AgentHubLayout or any route.
-// To activate: import RunLearnings in agent-hub-layout.tsx and render it inside
-// renderRunsTabContent() as an additional tab (e.g. a 'Learnings' tab on the
-// RunConsole, or as a standalone tab in TAB_DEFS).
-// Also needs a learning store: currently has no persistence layer.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { cn } from '@/lib/utils'

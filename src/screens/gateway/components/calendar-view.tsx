@@ -1,7 +1,3 @@
-// TODO(orphan): CalendarView is built but not imported or used anywhere in the app.
-// The roadmap lists Calendar/Agenda View as a planned feature for the Hub.
-// To activate: add a 'calendar' tab to TAB_DEFS in agent-hub-layout.tsx and render
-// <CalendarView> with cronJobs and missionRuns props.
 import { useMemo, useState } from 'react'
 import { ArrowLeft01Icon, ArrowRight01Icon, Clock01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'

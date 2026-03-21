@@ -4878,7 +4878,18 @@ export function AgentHubLayout({ agents }: AgentHubLayoutProps) {
     )
     setApprovals(updated)
     saveApprovals(updated)
-  }, [approvals, agentSessionMap])
+
+    // If this was a Kanban review gate approval, advance the task to Done
+    if (approval.action.startsWith('Review task: ')) {
+      const taskTitle = approval.action.slice('Review task: '.length)
+      const relatedTask = missionTasks.find(
+        (t) => t.title === taskTitle && t.status === 'review',
+      )
+      if (relatedTask) {
+        moveTasksToStatus([relatedTask.id], 'done')
+      }
+    }
+  }, [approvals, agentSessionMap, missionTasks, moveTasksToStatus])
 
   const handleDeny = useCallback((id: string) => {
     const approval = approvals.find(a => a.id === id)

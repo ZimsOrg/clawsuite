@@ -1,7 +1,3 @@
-// TODO(orphan): ApprovalsPage is built but not imported or rendered anywhere.
-// The active approval surface is ApprovalsBell (header dropdown).
-// ApprovalsPage provides a full-page approvals view — consider wiring it as a
-// dedicated panel in the Configure tab or as a standalone modal.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchGatewayApprovals, type GatewayApprovalEntry } from '@/lib/gateway-api'
 import { cn } from '@/lib/utils'

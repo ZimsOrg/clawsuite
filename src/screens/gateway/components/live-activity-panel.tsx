@@ -1,7 +1,3 @@
-// TODO(orphan): LiveActivityPanel is built but not imported or used anywhere.
-// It wraps AgentOutputPanel with agent list + action buttons (kill/respawn/pause/steer).
-// This appears to be a more feature-rich alternative to the current right panel in
-// agent-hub-layout.tsx. Consider replacing the inline right panel with this component.
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { AgentWorkingRow, AgentWorkingStatus } from './agents-working-panel'

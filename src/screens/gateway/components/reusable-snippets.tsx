@@ -1,7 +1,3 @@
-// TODO(orphan): ReusableSnippets component is built but not imported or used anywhere.
-// Intended for storing reusable prompt/task snippets. No backing store exists.
-// To activate: create a snippet store (localStorage or Zustand persist), then wire
-// this component into the Configure tab or as a modal in the mission goal input area.
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 

@@ -1,7 +1,3 @@
-// TODO(orphan): PresenceIndicator is built but not imported or used anywhere.
-// CollaborationPresence (BroadcastChannel-based) IS wired. PresenceIndicator appears
-// to be an older or simpler variant. Consider merging into CollaborationPresence or
-// removing if redundant.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 

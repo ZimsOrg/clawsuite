@@ -1,9 +1,3 @@
-// TODO(orphan): AgentsWorkingPanel is built but not rendered anywhere.
-// It is imported as `_AgentsWorkingPanel` in agent-hub-layout.tsx to suppress
-// the unused-import lint error. The data it would display (agentWorkingRows) is
-// instead rendered inline inside renderRunsTabContent() "Live Agent Status" section.
-// Options: (1) wire this into the Overview tab to replace the inline rows,
-//          (2) delete if the inline version is the permanent approach.
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 

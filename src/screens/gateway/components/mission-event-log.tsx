@@ -1,9 +1,3 @@
-// TODO(orphan): MissionEventLog component is built but not imported or used anywhere.
-// The event types and data exist in mission-event-store.ts (non-persisted).
-// To activate: import in agent-hub-layout.tsx and render inside renderRunsTabContent()
-// as an 'Events' sub-tab on RunConsole, passing events from useMissionEventStore().
-// NOTE: Events are not persisted — lost on page refresh. Persistence needs to be added
-// to mission-event-store.ts (or archive to mission-checkpoint) before this is useful.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertDiamondIcon,
