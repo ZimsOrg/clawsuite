@@ -439,22 +439,18 @@ export function Conductor() {
       handleNewMission()
       return
     }
-    if (window.confirm('Return to home and clear the current mission view?')) {
-      setIsStopping(true)
-      try {
-        await abortMission()
-      } catch {
-        /* stale session cleanup should not block reset */
-      } finally {
-        handleNewMission()
-      }
+    setIsStopping(true)
+    try {
+      await abortMission()
+    } catch {
+      /* stale session cleanup should not block reset */
+    } finally {
+      handleNewMission()
     }
   }, [abortMission, activeMission, handleNewMission])
 
   const handleStopMission = useCallback(async () => {
     if (isStopping) return
-    const shouldStop = window.confirm('Abort this mission and return to home?')
-    if (!shouldStop) return
     setIsStopping(true)
     try {
       await abortMission()
@@ -465,7 +461,6 @@ export function Conductor() {
   }, [abortMission, handleNewMission, isStopping])
 
   const handleDismissStaleMission = useCallback(() => {
-    if (!window.confirm('Clear this mission from the workspace and return home?')) return
     handleNewMission()
   }, [handleNewMission])
 
