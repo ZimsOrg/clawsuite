@@ -519,12 +519,13 @@ export function useConductorWorkspace(options?: {
       projectPath?: string
       tasks: Array<{ title: string; description?: string; agent?: string }>
     }) => {
-      // 1. Create or reuse project
+      // 1. Create or reuse project (default path to /tmp/conductor-workspace if none given)
       let resolvedProjectId = projectId
       if (!resolvedProjectId) {
+        const defaultPath = params.projectPath ?? `/tmp/conductor-${Date.now()}`
         const project = await createProjectMutation.mutateAsync({
           name: params.projectName ?? params.goal.slice(0, 64),
-          path: params.projectPath,
+          path: defaultPath,
         })
         resolvedProjectId = project?.id ?? null
       }
