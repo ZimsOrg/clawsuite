@@ -10,7 +10,7 @@ import { TaskBoard as _TaskBoard, type HubTask, type TaskBoardRef, type TaskStat
 // import { MissionTimeline } from './components/mission-timeline'
 import { AgentOutputPanel } from './components/agent-output-panel'
 import { emitFeedEvent, onFeedEvent } from './components/feed-event-bus'
-import { AgentsWorkingPanel as _AgentsWorkingPanel, type AgentWorkingRow, type AgentWorkingStatus } from './components/agents-working-panel'
+import { AgentsWorkingPanel, type AgentWorkingRow, type AgentWorkingStatus } from './components/agents-working-panel'
 import { OfficeView as PixelOfficeView } from './components/office-view'
 import { Markdown } from '@/components/prompt-kit/markdown'
 import { ROUGH_COST_PER_1K_TOKENS_USD } from '@/lib/config/costs'
@@ -35,8 +35,16 @@ import {
   type GatewayModelCatalogEntry,
 } from '@/lib/gateway-api'
 import { ApprovalsBell } from './components/approvals-bell'
+import { ApprovalsPage } from './components/approvals-page'
 import { TemplatePicker } from './components/template-picker'
 import { AgentChatPanel } from './components/agent-chat-panel'
+import { CalendarView } from './components/calendar-view'
+import { AgendaView } from './components/agenda-view'
+import { LiveActivityPanel } from './components/live-activity-panel'
+import { PresenceIndicator } from './components/presence-indicator'
+import { ReusableSnippets } from './components/reusable-snippets'
+import { MissionEventLog } from './components/mission-event-log'
+import { useMissionEventStore } from '@/stores/mission-event-store'
 import { CostAnalyticsDashboard } from './components/cost-analytics'
 import { RunConsole } from './components/run-console'
 import { RunCompare } from './components/run-compare'
@@ -277,14 +285,15 @@ const EXAMPLE_MISSIONS: Array<{ label: string; text: string }> = [
 type GatewayStatus = 'connected' | 'disconnected' | 'spawning'
 type WizardStep = 'gateway' | 'team' | 'goal' | 'launch'
 
-type ActiveTab = 'overview' | 'configure' | 'runs' | 'kanban' | 'analytics'
-type ConfigSection = 'agents' | 'teams' | 'keys'
+type ActiveTab = 'overview' | 'configure' | 'runs' | 'kanban' | 'analytics' | 'calendar'
+type ConfigSection = 'agents' | 'teams' | 'keys' | 'approvals' | 'snippets'
 
 const TAB_DEFS: Array<{ id: ActiveTab; icon: string; label: string }> = [
   { id: 'overview', icon: '🏠', label: 'Overview' },
   { id: 'runs', icon: '▶️', label: 'Runs' },
   { id: 'kanban', icon: '📋', label: 'Board' },
   { id: 'analytics', icon: '📊', label: 'Analytics' },
+  { id: 'calendar', icon: '📅', label: 'Calendar' },
   { id: 'configure', icon: '⚙️', label: 'Configure' },
 ]
 
@@ -292,6 +301,8 @@ const CONFIG_SECTIONS: Array<{ id: ConfigSection; icon: string; label: string }>
   { id: 'agents', icon: '🤖', label: 'Agents' },
   { id: 'teams', icon: '👥', label: 'Teams' },
   { id: 'keys', icon: '🔑', label: 'API Keys' },
+  { id: 'approvals', icon: '✅', label: 'Approvals' },
+  { id: 'snippets', icon: '📝', label: 'Snippets' },
 ]
 
 const HUB_PAGE_TITLE_CLASS = 'text-lg font-bold text-neutral-900 dark:text-neutral-100 md:text-xl'
@@ -2942,6 +2953,12 @@ export function AgentHubLayout({ agents }: AgentHubLayoutProps) {
   // ── Approvals state ────────────────────────────────────────────────────────
   const [approvals, setApprovals] = useState<ApprovalRequest[]>(() => loadApprovals())
   const [runConsoleApprovals, setRunConsoleApprovals] = useState<Array<{ id: string; tool: string; args?: string; agentName?: string }>>([])
+
+  // ── Mission events (for MissionEventLog) ──────────────────────────────────
+  const missionEvents = useMissionEventStore((state) => state.events)
+
+  // ── Calendar view state ────────────────────────────────────────────────────
+  const [calendarViewMode, setCalendarViewMode] = useState<'calendar' | 'agenda'>('calendar')
   const {
     activeMission,
     missionActive,
@@ -6467,6 +6484,65 @@ Respond with ONLY a JSON array, no markdown:
 
           {/* Remote Agents Panel removed from overview — too noisy with 29+ sessions.
               Available as a dedicated section if we add a "Sessions" tab later. */}
+
+          {/* ── Agents Working Panel — live agent status rows ── */}
+          {agentWorkingRows.length > 0 && (
+            <section className="relative mx-auto mb-4 w-full max-w-[1600px] shrink-0 px-3 sm:px-4">
+              {/* Desktop: use LiveActivityPanel (richer, includes output) */}
+              <div className="hidden lg:block">
+                <LiveActivityPanel
+                  agents={agentWorkingRows}
+                  selectedAgentId={selectedOutputAgentId}
+                  sessionKeyByAgentId={agentSessionMap}
+                  tasksByAgentId={Object.fromEntries(
+                    team.map((m) => [m.id, missionTasks.filter((t) => t.agentId === m.id)])
+                  )}
+                  onViewAgent={(agentId) => {
+                    setSelectedOutputAgentId(agentId)
+                    setOutputPanelVisible(true)
+                  }}
+                  onKillAgent={(agentId) => void handleKillAgent(agentId)}
+                  onRespawnAgent={(agentId) => void scheduleAgentRetry(agentId, agentSessionMap[agentId] ?? '', 'manual respawn')}
+                  onPauseAgent={(agentId, pause) => void _handleSetAgentPaused(agentId, pause)}
+                  onSteerAgent={(agentId, message) => void handleSteerAgent(agentId, message)}
+                  onCloseOutput={() => setOutputPanelVisible(false)}
+                  missionRunning={isMissionRunning}
+                />
+              </div>
+              {/* Mobile: compact AgentsWorkingPanel */}
+              <div className="lg:hidden">
+                <AgentsWorkingPanel
+                  agents={agentWorkingRows}
+                  selectedAgentId={selectedOutputAgentId}
+                  onSelectAgent={(agentId) => {
+                    setSelectedOutputAgentId(agentId)
+                    setOutputPanelVisible(true)
+                  }}
+                  onKillAgent={(agentId) => void handleKillAgent(agentId)}
+                  onRespawnAgent={(agentId) => void scheduleAgentRetry(agentId, agentSessionMap[agentId] ?? '', 'manual respawn')}
+                  onPauseAgent={(agentId, pause) => void _handleSetAgentPaused(agentId, pause)}
+                  onSteerAgent={(agentId, message) => void handleSteerAgent(agentId, message)}
+                />
+              </div>
+            </section>
+          )}
+
+          {/* ── Mission Event Log — recent events panel ── */}
+          {missionEvents.length > 0 && (
+            <section className="relative mx-auto mb-4 w-full max-w-[1600px] shrink-0 px-3 sm:px-4">
+              <details className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+                <summary className="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white">
+                  📋 Mission Events ({missionEvents.length})
+                </summary>
+                <div className="max-h-64 overflow-auto">
+                  <MissionEventLog
+                    events={missionEvents}
+                    agentNames={Object.fromEntries(team.map((m) => [m.id, m.name]))}
+                  />
+                </div>
+              </details>
+            </section>
+          )}
       </div>
     )
   }
@@ -7351,7 +7427,28 @@ Respond with ONLY a JSON array, no markdown:
             </div>
           ) : null}
 
-          {/* Approvals moved to header bell — see ApprovalsBell component */}
+          {/* Approvals moved to header bell — now also available as full-page view */}
+          {configSection === 'approvals' ? (
+            <div className="space-y-4">
+              <ApprovalsPage
+                approvals={approvals}
+                onApprove={(id) => handleApprove(id)}
+                onDeny={(id) => handleDeny(id)}
+              />
+            </div>
+          ) : null}
+
+          {/* Reusable Snippets — prompt/task snippet library */}
+          {configSection === 'snippets' ? (
+            <div className="space-y-4">
+              <ReusableSnippets
+                snippets={[]}
+                onUseSnippet={(_snippetId) => {
+                  /* TODO: insert snippet into mission goal input */
+                }}
+              />
+            </div>
+          ) : null}
         </div>
         </div>
       </div>
@@ -7758,6 +7855,7 @@ Respond with ONLY a JSON array, no markdown:
                       }}
                       sessionKeys={selectedEntry.status === 'running' || selectedEntry.status === 'needs_input' ? Object.values(agentSessionMap) : undefined}
                       agentNameMap={Object.fromEntries(Object.entries(agentSessionMap).map(([agentId, sessionKey]) => [sessionKey, team.find(m => m.id === agentId)?.name ?? agentId]))}
+                      missionEvents={missionEvents}
                     />
                   )
                 })() : (
@@ -8218,6 +8316,7 @@ Respond with ONLY a JSON array, no markdown:
               </div>
             </div>
             <CollaborationPresence />
+            <PresenceIndicator currentTab={activeTab} />
           </div>
         </div>
 
@@ -8348,6 +8447,85 @@ Respond with ONLY a JSON array, no markdown:
           {activeTab === 'analytics' && (
             <div className="h-full min-h-0">
               <CostAnalyticsDashboard missionReports={missionReports} />
+            </div>
+          )}
+
+          {activeTab === 'calendar' && (
+            <div className="h-full min-h-0 overflow-auto p-4">
+              {/* Calendar/Agenda view toggle */}
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalendarViewMode('calendar')}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    calendarViewMode === 'calendar'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300 hover:bg-orange-100 dark:hover:bg-orange-900/30',
+                  )}
+                >
+                  📅 Calendar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarViewMode('agenda')}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    calendarViewMode === 'agenda'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300 hover:bg-orange-100 dark:hover:bg-orange-900/30',
+                  )}
+                >
+                  📋 Agenda
+                </button>
+              </div>
+              {calendarViewMode === 'calendar' ? (
+                <CalendarView
+                  cronJobs={[]}
+                  missionRuns={missionHistory.map((cp) => ({
+                    id: cp.id,
+                    title: cp.label,
+                    startedAt: cp.startedAt ?? cp.updatedAt,
+                    completedAt: cp.completedAt,
+                    status: cp.status === 'aborted' ? 'failed' : cp.status === 'running' ? 'running' : 'complete',
+                  }))}
+                  onSelectEvent={(event) => {
+                    if (event.type === 'mission') {
+                      setActiveTab('runs')
+                      setSelectedRunId(event.id)
+                    }
+                  }}
+                />
+              ) : (
+                <AgendaView
+                  activeMissions={missionActive ? [{
+                    id: missionIdRef.current || 'active',
+                    title: activeMissionGoal || missionGoal || 'Active Mission',
+                    status: agentWorkingRows.some((r) => r.status === 'waiting_for_input') ? 'needs_input' : 'running',
+                    agents: team.length,
+                    startedAt: missionStartedAtRef.current || Date.now(),
+                  }] : []}
+                  tasks={missionTasks.map((t) => ({
+                    id: t.id,
+                    title: t.title,
+                    status: t.status,
+                    priority: t.priority,
+                    assignedAgent: t.agentId,
+                  }))}
+                  upcomingCrons={[]}
+                  recentCompletions={missionHistory.slice(0, 5).map((cp) => ({
+                    id: cp.id,
+                    title: cp.label,
+                    completedAt: cp.completedAt ?? cp.updatedAt,
+                    status: cp.status === 'aborted' ? 'failed' : 'complete',
+                  }))}
+                  agentStatuses={agentWorkingRows.map((r) => ({
+                    id: r.id,
+                    name: r.name,
+                    status: r.status === 'active' ? 'active' : r.status === 'waiting_for_input' ? 'waiting_for_input' : 'idle',
+                  }))}
+                />
+              )}
             </div>
           )}
         </div>
