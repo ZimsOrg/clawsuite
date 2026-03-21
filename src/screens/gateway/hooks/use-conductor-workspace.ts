@@ -279,6 +279,27 @@ function parseProject(payload: unknown): WorkspaceProject | null {
   }
 }
 
+function extractEntityRecord(
+  payload: unknown,
+  entityKey: string,
+): Record<string, unknown> | null {
+  const record = asRecord(payload)
+  const candidates = [record?.[entityKey], record?.data, payload]
+
+  for (const candidate of candidates) {
+    const candidateRecord = asRecord(candidate)
+    if (candidateRecord) return candidateRecord
+  }
+
+  return null
+}
+
+function extractEntityId(payload: unknown, entityKey: string): string | null {
+  const record = extractEntityRecord(payload, entityKey)
+  if (!record) return null
+  return asString(record.id) ?? asString(record[`${entityKey}_id`])
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useConductorWorkspace(options?: {
@@ -313,23 +334,52 @@ export function useConductorWorkspace(options?: {
     },
   })
 
+  // ── Create phase mutation ────────────────────────────────────────────────
+  const createPhaseMutation = useMutation({
+    mutationFn: async (params: {
+      project_id: string
+      name: string
+      sort_order: number
+    }) => {
+      const payload = await workspacePost('/api/workspace/phases', params)
+      return {
+        id: extractEntityId(payload, 'phase') ?? '',
+        payload,
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workspace', 'projects'] })
+      void queryClient.invalidateQueries({ queryKey: ['workspace', 'missions'] })
+    },
+  })
+
   // ── Create mission mutation ──────────────────────────────────────────────
   const createMissionMutation = useMutation({
     mutationFn: async (params: {
       name: string
-      project_id: string
-      tasks?: Array<{ name: string; description?: string; agent_id?: string }>
+      phase_id: string
     }) => {
       const payload = await workspacePost('/api/workspace/missions', params)
       const record = asRecord(payload)
-      const id =
-        asString(record?.id) ??
-        asString((asRecord(record?.mission))?.id) ??
-        ''
+      const id = extractEntityId(payload, 'mission') ?? ''
       return { id, ...(record ?? {}) }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workspace', 'missions'] })
+    },
+  })
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (params: {
+      mission_id: string
+      name: string
+      description?: string
+      suggested_agent_type?: string
+      sort_order: number
+    }) => workspacePost('/api/workspace-tasks', params),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workspace', 'missions'] })
+      void queryClient.invalidateQueries({ queryKey: ['workspace', 'task-runs'] })
     },
   })
 
@@ -480,24 +530,45 @@ export function useConductorWorkspace(options?: {
       }
       if (!resolvedProjectId) throw new Error('Failed to create project')
 
-      // 2. Create mission with tasks
+      // 2. Create phase under the project
+      const phase = await createPhaseMutation.mutateAsync({
+        project_id: resolvedProjectId,
+        name: 'Implementation',
+        sort_order: 0,
+      })
+      if (!phase.id) throw new Error('Failed to create phase')
+
+      // 3. Create mission under the phase
       const mission = await createMissionMutation.mutateAsync({
         name: params.goal.slice(0, 120),
-        project_id: resolvedProjectId,
-        tasks: params.tasks.map((t) => ({
-          name: t.title,
-          description: t.description,
-          agent_id: t.agent,
-        })),
+        phase_id: phase.id,
       })
       if (!mission.id) throw new Error('Failed to create mission')
 
-      // 3. Start mission
+      // 4. Create tasks for the mission
+      for (const [index, task] of params.tasks.entries()) {
+        await createTaskMutation.mutateAsync({
+          mission_id: mission.id,
+          name: task.title,
+          description: task.description,
+          suggested_agent_type: task.agent,
+          sort_order: index,
+        })
+      }
+
+      // 5. Start mission
       await startMissionMutation.mutateAsync(mission.id)
 
       return { missionId: mission.id, projectId: resolvedProjectId }
     },
-    [createMissionMutation, createProjectMutation, projectId, startMissionMutation],
+    [
+      createMissionMutation,
+      createPhaseMutation,
+      createProjectMutation,
+      createTaskMutation,
+      projectId,
+      startMissionMutation,
+    ],
   )
 
   // ── Return ───────────────────────────────────────────────────────────────
@@ -506,7 +577,9 @@ export function useConductorWorkspace(options?: {
     // Mutations
     decompose: decomposeMutation,
     createProject: createProjectMutation,
+    createPhase: createPhaseMutation,
     createMission: createMissionMutation,
+    createTask: createTaskMutation,
     startMission: startMissionMutation,
     pauseMission: pauseMissionMutation,
     resumeMission: resumeMissionMutation,
