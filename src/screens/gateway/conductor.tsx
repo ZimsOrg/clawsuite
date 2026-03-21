@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils'
 import { TEAM_TEMPLATES, type TeamMember } from './components/team-panel'
 import { RunConsole } from './components/run-console'
 import { ApprovalsBell } from './components/approvals-bell'
+import { AgentOutputPanel } from './components/agent-output-panel'
+import { ExportMissionButton } from './components/export-mission'
 import { TerminalWorkspace } from '@/components/terminal/terminal-workspace'
 import { useMissionStore } from '@/stores/mission-store'
 import { loadApprovals, saveApprovals, type ApprovalRequest } from './lib/approvals-store'
@@ -178,6 +180,12 @@ function getAgentStatusPresentation(status?: string): { dotClass: string; pulseC
       label: 'Waiting',
     }
   }
+  if (status === 'stopped') {
+    return {
+      dotClass: 'bg-[var(--theme-border2)]',
+      label: 'Stopped',
+    }
+  }
   return {
     dotClass: 'bg-[var(--theme-border2)]',
     label: 'Idle',
@@ -263,11 +271,23 @@ function getTaskColumnMeta(status: HubTask['status']): { label: string; dotClass
 
 export function Conductor() {
   const activeMission = useMissionStore((s) => s.activeMission)
+  const missionState = useMissionStore((s) => s.missionState)
   const missionHistory = useMissionStore((s) => s.missionHistory)
+  const agentSessionMap = useMissionStore((s) => s.agentSessionMap)
   const startMission = useMissionStore((s) => s.startMission)
   const completeMission = useMissionStore((s) => s.completeMission)
   const resetMission = useMissionStore((s) => s.resetMission)
-  const { dispatchMission, agentSessionStatus, isDispatching, abortMission, resetOrchestratorState } = useMissionOrchestrator()
+  const {
+    dispatchMission,
+    agentSessionStatus,
+    isDispatching,
+    retryAgent,
+    handleKillAgent,
+    handleMissionPause,
+    handleSteerAgent,
+    abortMission,
+    resetOrchestratorState,
+  } = useMissionOrchestrator()
 
   const [goalDraft, setGoalDraft] = useState('')
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
@@ -276,6 +296,7 @@ export function Conductor() {
   const [terminalExpanded, setTerminalExpanded] = useState(false)
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false)
   const [isStopping, setIsStopping] = useState(false)
+  const [selectedAgentId, setSelectedAgentId] = useState<string>()
   const [now, setNow] = useState(() => Date.now())
 
   const phase = getPhase(activeMission)
@@ -317,6 +338,16 @@ export function Conductor() {
     setIsStopping(false)
   }, [phase])
 
+  useEffect(() => {
+    if (!activeMission || activeMission.team.length === 0) {
+      setSelectedAgentId(undefined)
+      return
+    }
+    if (!selectedAgentId) return
+    const exists = activeMission.team.some((member) => member.id === selectedAgentId)
+    if (!exists) setSelectedAgentId(undefined)
+  }, [activeMission, selectedAgentId])
+
   const recentMissions = useMemo(
     () => buildRecentMissionEntries(activeMission, missionHistory.reports, storedReports),
     [activeMission, missionHistory.reports, storedReports],
@@ -353,9 +384,47 @@ export function Conductor() {
         name: member.name,
         modelId: member.modelId,
         status: agentSessionStatus[member.id]?.status ?? 'idle',
+        sessionKey: agentSessionMap[member.id] ?? null,
       })) ?? [],
-    [activeMission, agentSessionStatus],
+    [activeMission, agentSessionMap, agentSessionStatus],
   )
+
+  const selectedAgent = useMemo(
+    () => activeMission?.team.find((member) => member.id === selectedAgentId),
+    [activeMission, selectedAgentId],
+  )
+
+  const selectedAgentTasks = useMemo(
+    () => activeMission?.tasks.filter((task) => task.agentId === selectedAgentId) ?? [],
+    [activeMission, selectedAgentId],
+  )
+
+  const completedExportReport = useMemo(() => {
+    if (!activeMission || phase !== 'complete') return null
+    return {
+      id: activeReport?.id ?? activeMission.id,
+      missionId: activeReport?.missionId ?? activeMission.id,
+      name: activeReport?.name ?? activeMission.name,
+      goal: activeReport?.goal ?? activeMission.goal,
+      teamName: activeReport?.teamName ?? `${activeMission.team.length}-agent team`,
+      agents: activeReport?.agents ?? activeMission.team.map((member) => ({
+        id: member.id,
+        name: member.name,
+        modelId: member.modelId,
+      })),
+      taskStats: activeReport?.taskStats ?? {
+        total: activeMission.tasks.length,
+        completed: activeMission.tasks.filter((task) => task.status === 'done').length,
+        failed: 0,
+      },
+      duration: activeReport?.duration ?? Math.max(0, Date.now() - activeMission.startedAt),
+      tokenCount: activeReport?.tokenCount ?? 0,
+      costEstimate: activeReport?.costEstimate ?? 0,
+      artifacts: activeReport?.artifacts ?? activeMission.artifacts,
+      report: activeReport?.report ?? buildSummary(activeMission).join('\n'),
+      completedAt: activeReport?.completedAt ?? Date.now(),
+    }
+  }, [activeMission, activeReport, phase])
 
   const elapsedTime = useMemo(
     () => (activeMission ? formatElapsedTime(activeMission.startedAt, now) : '0s'),
@@ -607,6 +676,7 @@ export function Conductor() {
                 <HugeiconsIcon icon={PlusSignIcon} size={16} strokeWidth={1.7} />
                 New Mission
               </Button>
+              {completedExportReport ? <ExportMissionButton report={completedExportReport} /> : null}
             </div>
           </section>
 
@@ -658,7 +728,17 @@ export function Conductor() {
           <div className="border-t border-[var(--theme-border)] px-3 py-3">
             <div className="space-y-2">
               {agentCards.map((agent) => (
-                <div key={agent.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => setSelectedAgentId(agent.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors',
+                    selectedAgentId === agent.id
+                      ? 'bg-[var(--theme-accent-soft)]'
+                      : 'hover:bg-[var(--theme-card)]',
+                  )}
+                >
                   {(() => {
                     const statusPresentation = getAgentStatusPresentation(agent.status)
                     return (
@@ -674,7 +754,7 @@ export function Conductor() {
                       </>
                     )
                   })()}
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -719,6 +799,14 @@ export function Conductor() {
                 ) : null}
                 <button
                   type="button"
+                  onClick={() => void handleMissionPause(missionState === 'running')}
+                  disabled={isStopping || agentCards.length === 0}
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-1 text-xs font-medium text-[var(--theme-text)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {missionState === 'paused' ? 'Resume' : 'Pause'}
+                </button>
+                <button
+                  type="button"
                   onClick={() => void handleStopMission()}
                   disabled={isStopping}
                   className="inline-flex items-center gap-2 rounded-full border border-red-400/35 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-70"
@@ -729,40 +817,74 @@ export function Conductor() {
               </div>
             </div>
           </header>
-          <RunConsole
-            runId={activeMission.id}
-            runTitle={activeMission.name || activeMission.goal}
-            runStatus={runStatus}
-            agents={agentCards}
-            pendingApprovals={pendingApprovals.map((entry) => ({
-              id: entry.id,
-              tool: entry.action,
-              args: entry.context,
-              agentName: entry.agentName,
-            }))}
-            startedAt={activeMission.startedAt}
-            tokenCount={activeReport?.tokenCount}
-            costEstimate={activeReport?.costEstimate}
-            sessionKeys={Object.values(activeMission.agentSessionMap)}
-            agentNameMap={Object.fromEntries(
-              Object.entries(activeMission.agentSessionMap).map(([agentId, sessionKey]) => [
-                sessionKey,
-                activeMission.team.find((member) => member.id === agentId)?.name ?? agentId,
-              ]),
-            )}
-            artifacts={activeMission.artifacts.map((artifact) => ({
-              id: artifact.id,
-              type: artifact.type === 'code' ? 'file' : 'output',
-              name: artifact.title,
-              content: artifact.content,
-              timestamp: artifact.timestamp,
-            }))}
-            isStopping={isStopping}
-            onApprove={(approvalId) => handleApprovalAction(approvalId, 'approved')}
-            onDeny={(approvalId) => handleApprovalAction(approvalId, 'denied')}
-            tabs={['stream', 'timeline', 'artifacts']}
-            minimalChrome
-          />
+          {selectedAgent ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Agent View</p>
+                  <p className="truncate text-sm font-medium text-[var(--theme-text)]">{selectedAgent.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAgentId(undefined)}
+                  className="rounded-full border border-[var(--theme-border)] px-3 py-1 text-xs font-medium text-[var(--theme-text)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                >
+                  Back to stream
+                </button>
+              </div>
+              <AgentOutputPanel
+                agentName={selectedAgent.name}
+                sessionKey={agentSessionMap[selectedAgent.id] ?? null}
+                tasks={selectedAgentTasks}
+                onClose={() => setSelectedAgentId(undefined)}
+                modelId={selectedAgent.modelId}
+                statusLabel={getAgentStatusPresentation(agentSessionStatus[selectedAgent.id]?.status).label}
+                enableMessaging={missionState === 'running'}
+                approvals={approvals.filter((entry) => entry.agentId === selectedAgent.id && entry.status === 'pending')}
+                onApprove={(approvalId) => handleApprovalAction(approvalId, 'approved')}
+                onDeny={(approvalId) => handleApprovalAction(approvalId, 'denied')}
+                onSendMessage={(_sessionKey, message) => {
+                  if (!selectedAgent) return
+                  void handleSteerAgent(selectedAgent.id, message)
+                }}
+              />
+            </div>
+          ) : (
+            <RunConsole
+              runId={activeMission.id}
+              runTitle={activeMission.name || activeMission.goal}
+              runStatus={runStatus}
+              agents={agentCards}
+              pendingApprovals={pendingApprovals.map((entry) => ({
+                id: entry.id,
+                tool: entry.action,
+                args: entry.context,
+                agentName: entry.agentName,
+              }))}
+              startedAt={activeMission.startedAt}
+              tokenCount={activeReport?.tokenCount}
+              costEstimate={activeReport?.costEstimate}
+              sessionKeys={Object.values(agentSessionMap)}
+              agentNameMap={Object.fromEntries(
+                Object.entries(agentSessionMap).map(([agentId, sessionKey]) => [
+                  sessionKey,
+                  activeMission.team.find((member) => member.id === agentId)?.name ?? agentId,
+                ]),
+              )}
+              artifacts={activeMission.artifacts.map((artifact) => ({
+                id: artifact.id,
+                type: artifact.type === 'code' ? 'file' : 'output',
+                name: artifact.title,
+                content: artifact.content,
+                timestamp: artifact.timestamp,
+              }))}
+              isStopping={isStopping}
+              onApprove={(approvalId) => handleApprovalAction(approvalId, 'approved')}
+              onDeny={(approvalId) => handleApprovalAction(approvalId, 'denied')}
+              tabs={['stream', 'timeline', 'artifacts']}
+              minimalChrome
+            />
+          )}
         </section>
 
         <aside className="relative flex min-h-0 flex-col overflow-hidden border-l border-[var(--theme-border)] bg-[var(--theme-bg)]">
@@ -826,8 +948,18 @@ export function Conductor() {
                     const statusPresentation = getAgentStatusPresentation(agent.status)
                     const assignedTask = activeMission.tasks.find((task) => task.agentId === agent.id && task.status !== 'done')
                     return (
-                      <div key={agent.id} className="rounded-2xl bg-[var(--theme-card)] px-3 py-3">
-                        <div className="flex items-center gap-2">
+                      <div
+                        key={agent.id}
+                        className={cn(
+                          'rounded-2xl bg-[var(--theme-card)] px-3 py-3 transition-colors',
+                          selectedAgentId === agent.id && 'ring-1 ring-[var(--theme-accent)]',
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAgentId(agent.id)}
+                          className="flex w-full items-center gap-2 text-left"
+                        >
                           <span className="relative inline-flex size-2.5 shrink-0">
                             {statusPresentation.pulseClass ? (
                               <span className={cn('absolute inset-0 animate-ping rounded-full', statusPresentation.pulseClass)} />
@@ -836,10 +968,30 @@ export function Conductor() {
                           </span>
                           <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--theme-text)]">{agent.name}</span>
                           <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--theme-muted-2)]">{statusPresentation.label}</span>
-                        </div>
+                        </button>
                         <p className="mt-1 truncate text-xs text-[var(--theme-muted)]">
                           {assignedTask?.title ?? 'No active task assigned'}
                         </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {agent.status === 'error' ? (
+                            <button
+                              type="button"
+                              onClick={() => void retryAgent(agent.id)}
+                              className="rounded-full border border-amber-400/35 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/15"
+                            >
+                              Retry
+                            </button>
+                          ) : null}
+                          {agent.sessionKey ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleKillAgent(agent.id)}
+                              className="rounded-full border border-red-400/35 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/15"
+                            >
+                              Stop agent
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     )
                   })}

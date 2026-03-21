@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { killAgentSession } from '@/lib/gateway-api'
+import { killAgentSession, toggleAgentPause } from '@/lib/gateway-api'
 import { useMissionStore, type ActiveMission, type MissionProcessType } from '@/stores/mission-store'
 import { emitFeedEvent } from '../components/feed-event-bus'
 import { resolveGatewayModelId } from '../components/hub-utils'
@@ -154,6 +154,7 @@ export function useMissionOrchestrator() {
   const setAgentSessionMap = useMissionStore((state) => state.setAgentSessionMap)
   const setAgentSessionModelMap = useMissionStore((state) => state.setAgentSessionModelMap)
   const setAgentSessionStatus = useMissionStore((state) => state.setAgentSessionStatus)
+  const setMissionState = useMissionStore((state) => state.setMissionState)
   const completeMission = useMissionStore((state) => state.completeMission)
   const abortMissionInStore = useMissionStore((state) => state.abortMission)
 
@@ -740,6 +741,144 @@ export function useMissionOrchestrator() {
     })
   }, [dispatchAgentTasks, setAgentStatus, spawnAgentSession])
 
+  const handleSetAgentPaused = useCallback(async (agentId: string, pause: boolean) => {
+    const sessionKey = sessionMapRef.current[agentId]
+    if (!sessionKey) {
+      throw new Error('No active session to control')
+    }
+
+    const member = missionRef.current?.team.find((entry) => entry.id === agentId)
+    const agentName = member?.name ?? agentId
+    const previousStatus = useMissionStore.getState().agentSessionStatus[agentId]
+
+    setAgentStatus(agentId, {
+      status: pause ? 'idle' : 'active',
+      lastSeen: Date.now(),
+      lastMessage: pause ? 'Paused' : 'Resumed',
+    })
+
+    try {
+      await toggleAgentPause(sessionKey, pause)
+      emitFeedEvent({
+        type: pause ? 'agent_paused' : 'agent_active',
+        message: `${agentName} ${pause ? 'paused' : 'resumed'}`,
+        agentName,
+      })
+    } catch (error) {
+      if (previousStatus) {
+        setAgentStatus(agentId, previousStatus)
+      } else {
+        setAgentSessionStatus((previous) => {
+          const next = { ...previous }
+          delete next[agentId]
+          return next
+        })
+      }
+      throw error
+    }
+  }, [setAgentSessionStatus, setAgentStatus])
+
+  const handleMissionPause = useCallback(async (pause: boolean) => {
+    const mission = missionRef.current
+    if (!mission) return
+
+    const previousState = useMissionStore.getState().missionState
+    const activeAgentIds = mission.team
+      .map((member) => member.id)
+      .filter((agentId) => Boolean(sessionMapRef.current[agentId]))
+
+    try {
+      const results = await Promise.allSettled(
+        activeAgentIds.map((agentId) => handleSetAgentPaused(agentId, pause)),
+      )
+      const failed = results.some((result) => result.status === 'rejected')
+      setMissionState(failed ? previousState : pause ? 'paused' : 'running')
+    } catch {
+      setMissionState(previousState)
+    }
+  }, [handleSetAgentPaused, setMissionState])
+
+  const handleKillAgent = useCallback(async (agentId: string) => {
+    const sessionKey = sessionMapRef.current[agentId]
+    if (!sessionKey) return
+
+    const existingStream = streamMapRef.current.get(sessionKey)
+    if (existingStream) {
+      existingStream.close()
+      streamMapRef.current.delete(sessionKey)
+    }
+
+    completedSessionKeysRef.current.delete(sessionKey)
+
+    const member = missionRef.current?.team.find((entry) => entry.id === agentId)
+    const agentName = member?.name ?? agentId
+
+    try {
+      await killAgentSession(sessionKey)
+    } finally {
+      sessionMapRef.current = Object.fromEntries(
+        Object.entries(sessionMapRef.current).filter(([key]) => key !== agentId),
+      )
+      setAgentSessionMap((previous) => {
+        const next = { ...previous }
+        delete next[agentId]
+        return next
+      })
+      setAgentSessionStatus((previous) => ({
+        ...previous,
+        [agentId]: {
+          status: 'error',
+          lastSeen: Date.now(),
+          lastMessage: 'Agent stopped',
+        },
+      }))
+      emitFeedEvent({
+        type: 'agent_killed',
+        message: `${agentName} session killed`,
+        agentName,
+      })
+    }
+  }, [setAgentSessionMap, setAgentSessionStatus])
+
+  const handleSteerAgent = useCallback(async (agentId: string, message: string) => {
+    const sessionKey = sessionMapRef.current[agentId]
+    if (!sessionKey) {
+      throw new Error('No active session to steer')
+    }
+
+    const directive = message.trim()
+    if (!directive) return
+
+    const response = await fetch('/api/sessions/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionKey, message: directive }),
+    })
+    const payload = (await response.json().catch(() => ({}))) as DispatchResponse
+
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || payload.message || `HTTP ${response.status}`)
+    }
+
+    const member = missionRef.current?.team.find((entry) => entry.id === agentId)
+    const agentName = member?.name ?? agentId
+
+    completedSessionKeysRef.current.delete(sessionKey)
+    setAgentSessionStatus((previous) => ({
+      ...previous,
+      [agentId]: {
+        status: 'active',
+        lastSeen: Date.now(),
+        lastMessage: directive,
+      },
+    }))
+    emitFeedEvent({
+      type: 'agent_active',
+      message: `Sent message to ${agentName}: "${directive.slice(0, 80)}${directive.length > 80 ? '…' : ''}"`,
+      agentName,
+    })
+  }, [setAgentSessionStatus])
+
   const abortMission = useCallback(async () => {
     const sessionKeys = Object.values(sessionMapRef.current).filter(Boolean)
     closeAllStreams()
@@ -865,7 +1004,7 @@ export function useMissionOrchestrator() {
   }, [activeMission, agentSessionMap, missionState, setAgentSessionStatus])
 
   useEffect(() => {
-    if (missionState === 'running') return
+    if (missionState === 'running' || missionState === 'paused') return
     resetOrchestratorState()
   }, [missionState, resetOrchestratorState])
 
@@ -878,6 +1017,9 @@ export function useMissionOrchestrator() {
     agentSessionStatus,
     isDispatching,
     retryAgent,
+    handleKillAgent,
+    handleMissionPause,
+    handleSteerAgent,
     abortMission,
     resetOrchestratorState,
   }
