@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { RunLearnings, type RunLearningsProps } from './run-learnings'
 import { MissionEventLog } from './mission-event-log'
 import type { MissionEvent } from '@/screens/gateway/lib/mission-events'
+import { onFeedEvent, type FeedEvent } from './feed-event-bus'
 
 type RunArtifact = {
   id: string
@@ -37,6 +38,7 @@ type RunConsoleProps = {
   costEstimate?: number
   onClose?: () => void
   onStopMission?: () => void
+  isStopping?: boolean
   onKillAgent?: (agentId: string) => void
   onSteerAgent?: (agentId: string, message: string) => void
   onApprove?: (approvalId: string) => void
@@ -176,6 +178,15 @@ function getEventPillLabel(event: LiveStreamEvent): string {
   return event.eventType.toUpperCase()
 }
 
+function mapFeedEventType(event: FeedEvent): LiveStreamEvent['eventType'] {
+  if (event.type !== 'system') return 'status'
+  const lower = event.message.toLowerCase()
+  if (lower.includes('failed') || lower.includes('error') || lower.includes('aborted') || lower.includes('disconnected')) {
+    return 'error'
+  }
+  return 'status'
+}
+
 export function RunConsole({
   runId,
   runTitle,
@@ -188,6 +199,7 @@ export function RunConsole({
   costEstimate,
   onClose,
   onStopMission,
+  isStopping = false,
   onKillAgent,
   onSteerAgent,
   onApprove,
@@ -206,7 +218,8 @@ export function RunConsole({
   const [streamView, setStreamView] = useState<StreamView>('combined')
   const [steerTarget, setSteerTarget] = useState<string | null>(null)
   const [steerInput, setSteerInput] = useState('')
-  const [liveEvents, setLiveEvents] = useState<LiveStreamEvent[]>([])
+  const [historyEvents, setHistoryEvents] = useState<LiveStreamEvent[]>([])
+  const [feedEvents, setFeedEvents] = useState<LiveStreamEvent[]>([])
   const [isAutoScroll, setIsAutoScroll] = useState(true)
   const [copiedArtifactId, setCopiedArtifactId] = useState<string | null>(null)
   const [expandedArtifactId, setExpandedArtifactId] = useState<string | null>(null)
@@ -239,7 +252,7 @@ export function RunConsole({
       } catch { /* skip failed fetches */ }
     }
     allEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    setLiveEvents(allEvents)
+    setHistoryEvents(allEvents)
   }, [sessionKeys, agentNameMap])
 
   // Initial fetch + polling when running
@@ -250,12 +263,32 @@ export function RunConsole({
     return () => clearInterval(interval)
   }, [fetchAllHistory, runStatus])
 
+  useEffect(() => {
+    setFeedEvents([])
+    const unsubscribe = onFeedEvent((event) => {
+      setFeedEvents((current) => {
+        if (current.some((entry) => entry.id === event.id)) return current
+        return [
+          ...current,
+          {
+            id: event.id,
+            timestamp: formatTs(event.timestamp),
+            agentName: event.agentName || 'System',
+            eventType: mapFeedEventType(event),
+            message: event.message,
+          },
+        ].slice(-200)
+      })
+    })
+    return unsubscribe
+  }, [runId])
+
   // Auto-scroll
   useEffect(() => {
     if (isAutoScroll && streamEndRef.current) {
       streamEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [liveEvents, isAutoScroll])
+  }, [feedEvents, historyEvents, isAutoScroll])
 
   const handleStreamScroll = useCallback(() => {
     const el = scrollContainerRef.current
@@ -268,7 +301,12 @@ export function RunConsole({
   const resolvedTokens = typeof tokenCount === 'number' ? tokenCount.toLocaleString() : '0'
   const statusLabel = formatRunStatus(runStatus)
 
-  const displayEvents: Array<{ id: string; timestamp: string; agentName: string; eventType: 'status' | 'output' | 'tool' | 'error'; message: string }> = liveEvents
+  const displayEvents: Array<{ id: string; timestamp: string; agentName: string; eventType: 'status' | 'output' | 'tool' | 'error'; message: string }> = useMemo(() => {
+    const merged = new Map<string, LiveStreamEvent>()
+    historyEvents.forEach((event) => merged.set(event.id, event))
+    feedEvents.forEach((event) => merged.set(event.id, event))
+    return Array.from(merged.values()).sort((a, b) => parseTimestampToSeconds(a.timestamp) - parseTimestampToSeconds(b.timestamp))
+  }, [feedEvents, historyEvents])
 
   const timelineBuckets = useMemo(() => {
     if (displayEvents.length === 0) return []
@@ -348,9 +386,10 @@ export function RunConsole({
               <button
                 type="button"
                 onClick={onStopMission}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-red-500/40 bg-red-500/15 px-3 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/25"
+                disabled={isStopping}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-red-500/40 bg-red-500/15 px-3 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                ■ Stop
+                {isStopping ? 'Stopping...' : '■ Stop'}
               </button>
             ) : null}
             {onClose ? (
@@ -397,7 +436,20 @@ export function RunConsole({
           <div className="flex flex-wrap items-center gap-2">
             {agents.map((agent) => (
               <div key={agent.id} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-700/80 bg-primary-900/50 px-2 py-1">
-                <span className={cn('h-1.5 w-1.5 rounded-full', agent.status === 'active' || agent.status === 'running' ? 'bg-emerald-400 animate-pulse' : agent.status === 'waiting_for_input' ? 'bg-amber-400' : 'bg-primary-500')} />
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    agent.status === 'active' || agent.status === 'running'
+                      ? 'bg-emerald-400 animate-pulse'
+                      : agent.status === 'dispatching'
+                        ? 'bg-amber-400'
+                        : agent.status === 'error'
+                          ? 'bg-red-400'
+                          : agent.status === 'waiting_for_input'
+                            ? 'bg-amber-400'
+                            : 'bg-primary-500',
+                  )}
+                />
                 <span className="text-[11px] font-medium text-primary-200">{agent.name}</span>
                 {onSteerAgent ? (
                   <button

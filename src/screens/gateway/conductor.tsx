@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowRight01Icon,
@@ -143,6 +143,48 @@ function formatRelativeTime(timestamp: number): string {
   return `${days}d ago`
 }
 
+function formatElapsedTime(timestamp: number, now: number): string {
+  const totalSeconds = Math.max(0, Math.floor((now - timestamp) / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+function getAgentStatusPresentation(status?: string): { dotClass: string; pulseClass?: string; label: string } {
+  if (status === 'active') {
+    return {
+      dotClass: 'bg-emerald-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]',
+      pulseClass: 'bg-emerald-400/60',
+      label: 'Working',
+    }
+  }
+  if (status === 'dispatching') {
+    return {
+      dotClass: 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)]',
+      label: 'Dispatching',
+    }
+  }
+  if (status === 'error') {
+    return {
+      dotClass: 'bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.35)]',
+      label: 'Error',
+    }
+  }
+  if (status === 'waiting_for_input') {
+    return {
+      dotClass: 'bg-amber-400',
+      label: 'Waiting',
+    }
+  }
+  return {
+    dotClass: 'bg-[var(--theme-border2)]',
+    label: 'Idle',
+  }
+}
+
 function getPhase(activeMission: ReturnType<typeof useMissionStore.getState>['activeMission']): ConductorPhase {
   if (!activeMission) return 'home'
   if (activeMission.state === 'completed' || activeMission.state === 'aborted') return 'complete'
@@ -222,6 +264,9 @@ export function Conductor() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [storedReports, setStoredReports] = useState<StoredMissionReport[]>([])
   const [terminalExpanded, setTerminalExpanded] = useState(false)
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false)
+  const [isStopping, setIsStopping] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
 
   const phase = getPhase(activeMission)
 
@@ -249,6 +294,18 @@ export function Conductor() {
       setStoredReports(loadStoredMissionReports())
     }
   }, [activeMission, completeMission])
+
+  useEffect(() => {
+    if (!activeMission || phase !== 'active') return
+    setNow(Date.now())
+    const intervalId = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [activeMission, phase])
+
+  useEffect(() => {
+    if (phase !== 'home') return
+    setIsStopping(false)
+  }, [phase])
 
   const recentMissions = useMemo(
     () => buildRecentMissionEntries(activeMission, missionHistory.reports, storedReports),
@@ -288,6 +345,11 @@ export function Conductor() {
         status: agentSessionStatus[member.id]?.status ?? 'idle',
       })) ?? [],
     [activeMission, agentSessionStatus],
+  )
+
+  const elapsedTime = useMemo(
+    () => (activeMission ? formatElapsedTime(activeMission.startedAt, now) : '0s'),
+    [activeMission, now],
   )
 
   const rightSidebarMissionReports = useMemo(
@@ -355,11 +417,35 @@ export function Conductor() {
     )
   }
 
-  const handleNewMission = () => {
+  const handleNewMission = useCallback(() => {
     resetMission()
     setGoalDraft('')
     setSelectedAction('build')
-  }
+    setIsStopping(false)
+  }, [resetMission])
+
+  const handleBackToHome = useCallback(() => {
+    if (!activeMission) {
+      handleNewMission()
+      return
+    }
+    if (window.confirm('Return to home and clear the current mission view?')) {
+      handleNewMission()
+    }
+  }, [activeMission, handleNewMission])
+
+  const handleStopMission = useCallback(async () => {
+    if (isStopping) return
+    const shouldStop = window.confirm('Abort this mission and return to home?')
+    if (!shouldStop) return
+    setIsStopping(true)
+    try {
+      await abortMission()
+      handleNewMission()
+    } finally {
+      setIsStopping(false)
+    }
+  }, [abortMission, handleNewMission, isStopping])
 
   if (phase === 'home') {
     return (
@@ -530,7 +616,7 @@ export function Conductor() {
 
   return (
     <div className="flex h-full min-h-full flex-col overflow-hidden bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_340px]">
+      <div className={cn('grid min-h-0 flex-1', rightSidebarCollapsed ? 'grid-cols-[220px_minmax(0,1fr)_28px]' : 'grid-cols-[220px_minmax(0,1fr)_340px]')}>
         <aside className="flex min-h-0 flex-col border-r border-[var(--theme-border)] bg-[var(--theme-bg)]">
           <div className="border-b border-[var(--theme-border)] px-4 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted-2)]">Missions</p>
@@ -556,13 +642,21 @@ export function Conductor() {
             <div className="space-y-2">
               {agentCards.map((agent) => (
                 <div key={agent.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-                  <span
-                    className={cn(
-                      'size-2 rounded-full',
-                      agent.status === 'active' ? 'bg-emerald-400' : agent.status === 'waiting_for_input' ? 'bg-amber-400' : 'bg-[var(--theme-border2)]',
-                    )}
-                  />
-                  <span className="truncate text-xs text-[var(--theme-text)]">{agent.name}</span>
+                  {(() => {
+                    const statusPresentation = getAgentStatusPresentation(agent.status)
+                    return (
+                      <>
+                        <span className="relative inline-flex size-2.5 shrink-0">
+                          {statusPresentation.pulseClass ? (
+                            <span className={cn('absolute inset-0 animate-ping rounded-full', statusPresentation.pulseClass)} />
+                          ) : null}
+                          <span className={cn('relative inline-flex size-2.5 rounded-full', statusPresentation.dotClass)} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-[var(--theme-text)]">{agent.name}</span>
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--theme-muted-2)]">{statusPresentation.label}</span>
+                      </>
+                    )
+                  })()}
                 </div>
               ))}
             </div>
@@ -570,6 +664,45 @@ export function Conductor() {
         </aside>
 
         <section className="flex min-h-0 flex-col overflow-hidden">
+          <header className="border-b border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted-2)]">
+                <button
+                  type="button"
+                  onClick={handleBackToHome}
+                  className="rounded-full border border-[var(--theme-border)] px-2.5 py-1 transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                >
+                  Back to Home
+                </button>
+                <span>Conductor</span>
+                <span className="text-[var(--theme-border2)]">&gt;</span>
+                <span className="max-w-[420px] truncate text-[var(--theme-text)]">{activeMission.name || activeMission.goal}</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="truncate text-lg font-semibold text-[var(--theme-text)]">{activeMission.name || activeMission.goal}</h1>
+                  <p className="truncate text-sm text-[var(--theme-muted)]">{activeMission.goal}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-1 text-xs font-medium text-[var(--theme-muted)]">
+                    Elapsed: {elapsedTime}
+                  </span>
+                  {isDispatching ? (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/35 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300">
+                      <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+                      Dispatching sessions
+                    </span>
+                  ) : null}
+                  {isStopping ? (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-red-400/35 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-300">
+                      <span className="size-2 rounded-full bg-red-400 animate-pulse" />
+                      Stopping mission
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </header>
           <RunConsole
             runId={activeMission.id}
             runTitle={activeMission.name || activeMission.goal}
@@ -598,13 +731,35 @@ export function Conductor() {
               content: artifact.content,
               timestamp: artifact.timestamp,
             }))}
-            onStopMission={() => void abortMission()}
+            onStopMission={() => void handleStopMission()}
+            isStopping={isStopping}
             onApprove={(approvalId) => handleApprovalAction(approvalId, 'approved')}
             onDeny={(approvalId) => handleApprovalAction(approvalId, 'denied')}
           />
         </section>
 
-        <aside className="flex min-h-0 flex-col overflow-y-auto border-l border-[var(--theme-border)] bg-[var(--theme-bg)]">
+        <aside className="relative flex min-h-0 flex-col overflow-hidden border-l border-[var(--theme-border)] bg-[var(--theme-bg)]">
+          <button
+            type="button"
+            onClick={() => setRightSidebarCollapsed((current) => !current)}
+            className="absolute left-0 top-20 z-10 flex h-10 w-7 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] text-[var(--theme-muted)] shadow-lg transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+            aria-label={rightSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <HugeiconsIcon
+              icon={ArrowRight01Icon}
+              size={14}
+              strokeWidth={1.7}
+              className={cn('transition-transform', rightSidebarCollapsed ? 'rotate-180' : '')}
+            />
+          </button>
+          {rightSidebarCollapsed ? (
+            <div className="flex h-full items-start justify-center pt-36">
+              <span className="-rotate-90 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--theme-muted-2)]">
+                Insights
+              </span>
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <section className="border-b border-[var(--theme-border)] p-3">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Board</h2>
@@ -676,6 +831,8 @@ export function Conductor() {
               <CostAnalyticsDashboard missionReports={rightSidebarMissionReports} compact />
             </div>
           </section>
+            </div>
+          )}
         </aside>
       </div>
 

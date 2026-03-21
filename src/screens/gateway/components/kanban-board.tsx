@@ -107,6 +107,11 @@ function appendNote(description: string, note: string): string {
   return description.trim() ? `${description.trim()}\n\n${entry}` : entry
 }
 
+function truncateCompactTitle(title: string): string {
+  if (title.length <= 40) return title
+  return `${title.slice(0, 37).trimEnd()}...`
+}
+
 export type KanbanBoardProps = {
   tasks: HubTask[]
   onUpdateTask: (task: HubTask) => void
@@ -283,20 +288,39 @@ export function KanbanBoard({
                           setMenuPosition({ x: event.clientX, y: event.clientY })
                           setNoteDraft('')
                         }}
-                        className="cursor-grab rounded-lg border border-[var(--theme-border)] bg-[var(--theme-card2)] p-3 active:cursor-grabbing"
+                        className={cn(
+                          'cursor-grab rounded-lg border border-[var(--theme-border)] bg-[var(--theme-card2)] active:cursor-grabbing',
+                          compact ? 'p-2' : 'p-3',
+                        )}
                       >
-                        <h4 className="line-clamp-2 text-sm font-semibold text-[var(--theme-text)]">{task.title}</h4>
+                        <h4
+                          title={task.title}
+                          className={cn(
+                            'font-semibold text-[var(--theme-text)]',
+                            compact ? 'truncate text-[12px] leading-4' : 'line-clamp-2 text-sm',
+                          )}
+                        >
+                          {compact ? truncateCompactTitle(task.title) : task.title}
+                        </h4>
 
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', PRIORITY_BADGES[task.priority])}>
+                        <div className={cn('flex items-center justify-between gap-2', compact ? 'mt-1.5' : 'mt-2')}>
+                          <span
+                            className={cn(
+                              'rounded-full border font-semibold uppercase tracking-wide',
+                              PRIORITY_BADGES[task.priority],
+                              compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]',
+                            )}
+                          >
                             {PRIORITY_LABELS[task.priority]}
                           </span>
-                          <span className="truncate text-[11px] text-[var(--theme-muted)]">{assignee}</span>
+                          <span className={cn('truncate text-[var(--theme-muted)]', compact ? 'max-w-[84px] text-[10px]' : 'text-[11px]')}>
+                            {assignee}
+                          </span>
                         </div>
 
                         {onAssignAgent ? (
-                          <div className="mt-2">
-                            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[var(--theme-muted)]">Assign</label>
+                          <div className={cn(compact ? 'mt-1.5' : 'mt-2')}>
+                            <label className={cn('mb-1 block font-medium uppercase tracking-wide text-[var(--theme-muted)]', compact ? 'text-[9px]' : 'text-[10px]')}>Assign</label>
                             <select
                               value={task.agentId ?? ''}
                               onChange={(event) => {
@@ -309,7 +333,10 @@ export function KanbanBoard({
                                   updatedAt: Date.now(),
                                 }))
                               }}
-                              className="w-full rounded-md border border-[var(--theme-border)] bg-[var(--theme-card)] px-2 py-1 text-[11px] text-[var(--theme-text)] outline-none"
+                              className={cn(
+                                'w-full rounded-md border border-[var(--theme-border)] bg-[var(--theme-card)] px-2 text-[var(--theme-text)] outline-none',
+                                compact ? 'py-1 text-[10px]' : 'py-1 text-[11px]',
+                              )}
                             >
                               <option value="">Unassigned</option>
                               {agents.map((agent) => (
@@ -319,7 +346,9 @@ export function KanbanBoard({
                           </div>
                         ) : null}
 
-                        <p className="mt-2 text-[11px] text-[var(--theme-muted)]">{formatTimeInColumn(task.updatedAt)}</p>
+                        <p className={cn('text-[var(--theme-muted)]', compact ? 'mt-1.5 text-[10px]' : 'mt-2 text-[11px]')}>
+                          {formatTimeInColumn(task.updatedAt)}
+                        </p>
                       </article>
                     )
                   })}

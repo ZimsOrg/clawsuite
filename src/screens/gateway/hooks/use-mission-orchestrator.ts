@@ -329,6 +329,16 @@ export function useMissionOrchestrator() {
     const reuseExisting = options?.reuseExisting !== false
     const labelSuffix = options?.labelSuffix ? ` (${options.labelSuffix})` : ''
     const label = `Mission: ${member.name}${labelSuffix}`
+    setAgentStatus(member.id, {
+      status: 'dispatching',
+      lastSeen: Date.now(),
+      lastMessage: 'Creating session',
+    })
+    emitFeedEvent({
+      type: 'system',
+      message: `Dispatching ${member.name}: creating session`,
+      agentName: member.name,
+    })
 
     if (reuseExisting) {
       const listResp = await fetch('/api/sessions')
@@ -339,7 +349,21 @@ export function useMissionOrchestrator() {
         )
         const existingKey =
           existing && typeof existing.key === 'string' ? existing.key.trim() : ''
-        if (existingKey) return existingKey
+        if (existingKey) {
+          setAgentSessionMap((previous) => ({ ...previous, [member.id]: existingKey }))
+          setAgentStatus(member.id, {
+            status: 'dispatching',
+            lastSeen: Date.now(),
+            lastMessage: 'Reusing existing session',
+          })
+          attachSessionStream(member.id, existingKey)
+          emitFeedEvent({
+            type: 'agent_spawned',
+            message: `reusing session for ${member.name}`,
+            agentName: member.name,
+          })
+          return existingKey
+        }
       }
     }
 
@@ -359,13 +383,24 @@ export function useMissionOrchestrator() {
     const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
     const sessionKey = readString(payload.sessionKey)
     if (!response.ok || !sessionKey) {
-      throw new Error(readString(payload.error) || readString(payload.message) || `Spawn failed: HTTP ${response.status}`)
+      const errorMessage = readString(payload.error) || readString(payload.message) || `Spawn failed: HTTP ${response.status}`
+      setAgentStatus(member.id, {
+        status: 'error',
+        lastSeen: Date.now(),
+        lastMessage: errorMessage,
+      })
+      emitFeedEvent({
+        type: 'system',
+        message: `Failed to create session for ${member.name}: ${errorMessage}`,
+        agentName: member.name,
+      })
+      throw new Error(errorMessage)
     }
 
     setAgentSessionMap((previous) => ({ ...previous, [member.id]: sessionKey }))
     setAgentSessionStatus((previous) => ({
       ...previous,
-      [member.id]: { status: 'active', lastSeen: Date.now() },
+      [member.id]: { status: 'dispatching', lastSeen: Date.now(), lastMessage: 'Session created' },
     }))
     if (model) {
       setAgentSessionModelMap((previous) => ({ ...previous, [member.id]: model }))
@@ -379,7 +414,7 @@ export function useMissionOrchestrator() {
 
     attachSessionStream(member.id, sessionKey)
     return sessionKey
-  }, [attachSessionStream, setAgentSessionMap, setAgentSessionModelMap, setAgentSessionStatus])
+  }, [attachSessionStream, setAgentSessionMap, setAgentSessionModelMap, setAgentSessionStatus, setAgentStatus])
 
   const dispatchAgentTasks = useCallback(async (params: {
     sessionKey: string
@@ -449,13 +484,22 @@ export function useMissionOrchestrator() {
     const currentMap = { ...sessionMapRef.current }
     for (const member of team) {
       if (currentMap[member.id]) {
+        setAgentStatus(member.id, {
+          status: 'dispatching',
+          lastSeen: Date.now(),
+          lastMessage: 'Preparing existing session',
+        })
         attachSessionStream(member.id, currentMap[member.id])
         continue
       }
-      currentMap[member.id] = await spawnAgentSession(member)
+      try {
+        currentMap[member.id] = await spawnAgentSession(member)
+      } catch {
+        /* per-agent spawn failures are surfaced through feed events and status state */
+      }
     }
     return currentMap
-  }, [attachSessionStream, spawnAgentSession])
+  }, [attachSessionStream, setAgentStatus, spawnAgentSession])
 
   const dispatchMission = useCallback(async (mission: ActiveMission) => {
     dispatchTokenRef.current = mission.id
@@ -468,6 +512,10 @@ export function useMissionOrchestrator() {
     emitFeedEvent({
       type: 'mission_started',
       message: `Mission started: ${mission.goal}`,
+    })
+    emitFeedEvent({
+      type: 'system',
+      message: `Dispatching ${mission.team.length} agent session${mission.team.length === 1 ? '' : 's'}`,
     })
 
     try {
@@ -485,6 +533,15 @@ export function useMissionOrchestrator() {
       if (mission.processType === 'hierarchical') {
         const [leadMember, ...workerMembers] = mission.team
         if (leadMember) {
+          const leadSessionKey = sessionMap[leadMember.id]
+          if (!leadSessionKey) {
+            emitFeedEvent({
+              type: 'system',
+              message: `Skipping ${leadMember.name}: no session available`,
+              agentName: leadMember.name,
+            })
+            return
+          }
           const leadTasks = tasksByAgent.get(leadMember.id) ?? [{
             id: createId('lead-task'),
             title: `Lead: ${mission.goal}`,
@@ -506,18 +563,41 @@ export function useMissionOrchestrator() {
             workerMembers,
           })
           retryPayloadRef.current[leadMember.id] = { tasks: leadTasks.map((task) => ({ ...task })), messageText: leadMessage }
-          await dispatchAgentTasks({
-            sessionKey: sessionMap[leadMember.id],
-            agentId: leadMember.id,
-            agentTasks: leadTasks,
-            messageText: leadMessage,
-            member: leadMember,
+          setAgentStatus(leadMember.id, {
+            status: 'dispatching',
+            lastSeen: Date.now(),
+            lastMessage: 'Sending assignment',
           })
+          emitFeedEvent({
+            type: 'system',
+            message: `Dispatching ${leadMember.name}: sending assignment`,
+            agentName: leadMember.name,
+          })
+          try {
+            await dispatchAgentTasks({
+              sessionKey: leadSessionKey,
+              agentId: leadMember.id,
+              agentTasks: leadTasks,
+              messageText: leadMessage,
+              member: leadMember,
+            })
+          } catch {
+            /* feed event + agent status already capture the failure */
+          }
         }
 
         for (const worker of workerMembers) {
           const workerTasks = tasksByAgent.get(worker.id) ?? []
           if (workerTasks.length === 0) continue
+          const workerSessionKey = sessionMap[worker.id]
+          if (!workerSessionKey) {
+            emitFeedEvent({
+              type: 'system',
+              message: `Skipping ${worker.name}: no session available`,
+              agentName: worker.name,
+            })
+            continue
+          }
           const workerMessage = buildDispatchMessage({
             agentId: worker.id,
             agentTasks: workerTasks,
@@ -527,13 +607,27 @@ export function useMissionOrchestrator() {
             leadMember: mission.team[0],
           })
           retryPayloadRef.current[worker.id] = { tasks: workerTasks.map((task) => ({ ...task })), messageText: workerMessage }
-          await dispatchAgentTasks({
-            sessionKey: sessionMap[worker.id],
-            agentId: worker.id,
-            agentTasks: workerTasks,
-            messageText: workerMessage,
-            member: worker,
+          setAgentStatus(worker.id, {
+            status: 'dispatching',
+            lastSeen: Date.now(),
+            lastMessage: 'Sending assignment',
           })
+          emitFeedEvent({
+            type: 'system',
+            message: `Dispatching ${worker.name}: sending assignment`,
+            agentName: worker.name,
+          })
+          try {
+            await dispatchAgentTasks({
+              sessionKey: workerSessionKey,
+              agentId: worker.id,
+              agentTasks: workerTasks,
+              messageText: workerMessage,
+              member: worker,
+            })
+          } catch {
+            /* feed event + agent status already capture the failure */
+          }
         }
         return
       }
@@ -542,6 +636,15 @@ export function useMissionOrchestrator() {
       for (let index = 0; index < entries.length; index += 1) {
         const [agentId, agentTasks] = entries[index]
         const member = mission.team.find((entry) => entry.id === agentId)
+        const sessionKey = sessionMap[agentId]
+        if (!sessionKey) {
+          emitFeedEvent({
+            type: 'system',
+            message: `Skipping ${member?.name || agentId}: no session available`,
+            agentName: member?.name,
+          })
+          continue
+        }
         const messageText = buildDispatchMessage({
           agentId,
           agentTasks,
@@ -550,13 +653,27 @@ export function useMissionOrchestrator() {
           mode: mission.processType,
         })
         retryPayloadRef.current[agentId] = { tasks: agentTasks.map((task) => ({ ...task })), messageText }
-        await dispatchAgentTasks({
-          sessionKey: sessionMap[agentId],
-          agentId,
-          agentTasks,
-          messageText,
-          member,
+        setAgentStatus(agentId, {
+          status: 'dispatching',
+          lastSeen: Date.now(),
+          lastMessage: 'Sending assignment',
         })
+        emitFeedEvent({
+          type: 'system',
+          message: `Dispatching ${member?.name || agentId}: sending assignment`,
+          agentName: member?.name,
+        })
+        try {
+          await dispatchAgentTasks({
+            sessionKey,
+            agentId,
+            agentTasks,
+            messageText,
+            member,
+          })
+        } catch {
+          /* feed event + agent status already capture the failure */
+        }
 
         if (mission.processType === 'sequential' && index < entries.length - 1) {
           await new Promise<void>((resolve) => window.setTimeout(resolve, 30_000))
@@ -567,7 +684,7 @@ export function useMissionOrchestrator() {
         setIsDispatching(false)
       }
     }
-  }, [dispatchAgentTasks, ensureAgentSessions])
+  }, [dispatchAgentTasks, ensureAgentSessions, setAgentStatus])
 
   const retryAgent = useCallback(async (agentId: string) => {
     const mission = missionRef.current
@@ -680,6 +797,10 @@ export function useMissionOrchestrator() {
             continue
           }
           if (existing?.status === 'waiting_for_input') {
+            nextStatus[member.id] = existing
+            continue
+          }
+          if (existing?.status === 'dispatching' && !lastMessage) {
             nextStatus[member.id] = existing
             continue
           }
