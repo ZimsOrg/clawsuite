@@ -651,6 +651,7 @@ function ChatSidebarComponent({
   // Gateway
   const isCronActive = pathname === '/cron'
   const isChannelsActive = pathname === '/channels'
+  const isConductorActive = pathname === '/conductor'
   const isSessionsActive = pathname === '/sessions'
   const isUsageActive = pathname === '/usage'
   const isCostsActive = pathname === '/costs'
@@ -682,6 +683,7 @@ function ChatSidebarComponent({
     '/costs',
   ]
   const gatewayRoutes = [
+    '/conductor',
     '/channels',
     '/instances',
     '/sessions',
@@ -989,6 +991,13 @@ function ChatSidebarComponent({
   ]
 
   const gatewayItems: NavItemDef[] = [
+    {
+      kind: 'link',
+      to: '/conductor',
+      icon: Home01Icon,
+      label: 'Conductor',
+      active: isConductorActive,
+    },
     {
       kind: 'link',
       to: '/channels',

@@ -38,6 +38,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CronRouteImport } from './routes/cron'
 import { Route as CostsRouteImport } from './routes/costs'
 import { Route as ConnectRouteImport } from './routes/connect'
+import { Route as ConductorRouteImport } from './routes/conductor'
 import { Route as ChannelsRouteImport } from './routes/channels'
 import { Route as BrowserRouteImport } from './routes/browser'
 import { Route as AgentsRouteImport } from './routes/agents'
@@ -316,6 +317,11 @@ const CostsRoute = CostsRouteImport.update({
 const ConnectRoute = ConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConductorRoute = ConductorRouteImport.update({
+  id: '/conductor',
+  path: '/conductor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChannelsRoute = ChannelsRouteImport.update({
@@ -1021,6 +1027,7 @@ export interface FileRoutesByFullPath {
   '/agents': typeof AgentsRoute
   '/browser': typeof BrowserRoute
   '/channels': typeof ChannelsRoute
+  '/conductor': typeof ConductorRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
   '/cron': typeof CronRoute
@@ -1186,6 +1193,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AgentsRoute
   '/browser': typeof BrowserRoute
   '/channels': typeof ChannelsRoute
+  '/conductor': typeof ConductorRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
   '/cron': typeof CronRoute
@@ -1351,6 +1359,7 @@ export interface FileRoutesById {
   '/agents': typeof AgentsRoute
   '/browser': typeof BrowserRoute
   '/channels': typeof ChannelsRoute
+  '/conductor': typeof ConductorRoute
   '/connect': typeof ConnectRoute
   '/costs': typeof CostsRoute
   '/cron': typeof CronRoute
@@ -1518,6 +1527,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/browser'
     | '/channels'
+    | '/conductor'
     | '/connect'
     | '/costs'
     | '/cron'
@@ -1683,6 +1693,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/browser'
     | '/channels'
+    | '/conductor'
     | '/connect'
     | '/costs'
     | '/cron'
@@ -1847,6 +1858,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/browser'
     | '/channels'
+    | '/conductor'
     | '/connect'
     | '/costs'
     | '/cron'
@@ -2013,6 +2025,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   BrowserRoute: typeof BrowserRoute
   ChannelsRoute: typeof ChannelsRoute
+  ConductorRoute: typeof ConductorRoute
   ConnectRoute: typeof ConnectRoute
   CostsRoute: typeof CostsRoute
   CronRoute: typeof CronRoute
@@ -2319,6 +2332,13 @@ declare module '@tanstack/react-router' {
       path: '/connect'
       fullPath: '/connect'
       preLoaderRoute: typeof ConnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conductor': {
+      id: '/conductor'
+      path: '/conductor'
+      fullPath: '/conductor'
+      preLoaderRoute: typeof ConductorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/channels': {
@@ -3551,6 +3571,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   BrowserRoute: BrowserRoute,
   ChannelsRoute: ChannelsRoute,
+  ConductorRoute: ConductorRoute,
   ConnectRoute: ConnectRoute,
   CostsRoute: CostsRoute,
   CronRoute: CronRoute,

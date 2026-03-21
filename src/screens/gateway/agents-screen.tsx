@@ -14,6 +14,7 @@ import { fetchCronJobs } from '@/lib/cron-api'
 import { toggleAgentPause } from '@/lib/gateway-api'
 import { toast } from '@/components/ui/toast'
 import { AgentHubLayout } from './agent-hub-layout'
+import { Conductor } from './conductor'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 
 type AgentGatewayEntry = {
@@ -107,7 +108,7 @@ type AgentConfigPatchPayload = {
   channels: Record<string, Record<string, unknown>>
 }
 
-type AgentsScreenVariant = 'mission-control' | 'registry'
+type AgentsScreenVariant = 'mission-control' | 'registry' | 'conductor'
 type AgentsScreenProps = {
   variant?: AgentsScreenVariant
 }
@@ -666,6 +667,7 @@ export function AgentsScreen({ variant = 'mission-control' }: AgentsScreenProps)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const missionControlEnabled = variant === 'mission-control'
+  const conductorEnabled = variant === 'conductor'
   const [optimisticPausedByAgentId, setOptimisticPausedByAgentId] = useState<
     Record<string, boolean>
   >({})
@@ -1246,6 +1248,10 @@ export function AgentsScreen({ variant = 'mission-control' }: AgentsScreenProps)
   const agentHubPullIndicatorStyle = agentHubPulling
     ? { transform: `translateY(${Math.min(agentHubPullDistance - 8, 48)}px)`, opacity: Math.min(agentHubPullDistance / agentHubThreshold, 1) }
     : undefined
+
+  if (conductorEnabled) {
+    return <Conductor />
+  }
 
   if (missionControlEnabled) {
     return (
