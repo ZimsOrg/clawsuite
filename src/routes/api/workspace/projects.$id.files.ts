@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
+import { execFileSync } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { isAuthenticated } from '../../../server/auth-middleware'
@@ -53,6 +54,44 @@ function getPathDepth(relativePath: string): number {
   return normalized.length
 }
 
+async function readProjectFiles(projectPath: string): Promise<ProjectFileEntry[]> {
+  const entries = await readdir(projectPath, { recursive: true, withFileTypes: true })
+  const files: ProjectFileEntry[] = []
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+
+    const parentPath = getDirentParent(entry) ?? projectPath
+    const absolutePath = path.join(parentPath, entry.name)
+    const relativePath = path.relative(projectPath, absolutePath)
+    if (!relativePath || relativePath.startsWith('..')) continue
+
+    const segments = relativePath.split(path.sep)
+    if (segments.some((segment) => SKIP_DIRS.has(segment))) continue
+    if (getPathDepth(relativePath) > MAX_DEPTH) continue
+
+    const stat = await readFile(absolutePath, { encoding: null }).then((buffer) => ({
+      buffer,
+      size: buffer.byteLength,
+    }))
+
+    const text =
+      isTextFile(relativePath) && stat.size <= MAX_TEXT_FILE_SIZE
+        ? stat.buffer.toString('utf8')
+        : undefined
+
+    files.push({
+      relativePath,
+      size: stat.size,
+      isText: Boolean(text !== undefined),
+      content: text,
+    })
+  }
+
+  files.sort((left, right) => left.relativePath.localeCompare(right.relativePath))
+  return files
+}
+
 export const Route = createFileRoute('/api/workspace/projects/$id/files')({
   server: {
     handlers: {
@@ -94,39 +133,18 @@ export const Route = createFileRoute('/api/workspace/projects/$id/files')({
             return json({ ok: false, error: 'Project path not configured' }, { status: 400 })
           }
 
-          const entries = await readdir(projectPath, { recursive: true, withFileTypes: true })
-          const files: ProjectFileEntry[] = []
-
-          for (const entry of entries) {
-            if (!entry.isFile()) continue
-
-            const parentPath = getDirentParent(entry) ?? projectPath
-            const absolutePath = path.join(parentPath, entry.name)
-            const relativePath = path.relative(projectPath, absolutePath)
-            if (!relativePath || relativePath.startsWith('..')) continue
-
-            const segments = relativePath.split(path.sep)
-            if (segments.some((segment) => SKIP_DIRS.has(segment))) continue
-            if (getPathDepth(relativePath) > MAX_DEPTH) continue
-
-            const stat = await readFile(absolutePath, { encoding: null }).then((buffer) => ({
-              buffer,
-              size: buffer.byteLength,
-            }))
-
-            const text = isTextFile(relativePath) && stat.size <= MAX_TEXT_FILE_SIZE
-              ? stat.buffer.toString('utf8')
-              : undefined
-
-            files.push({
-              relativePath,
-              size: stat.size,
-              isText: Boolean(text !== undefined),
-              content: text,
-            })
+          let files = await readProjectFiles(projectPath)
+          if (files.length === 0) {
+            const topLevelEntries = await readdir(projectPath)
+            if (topLevelEntries.includes('.git')) {
+              try {
+                execFileSync('git', ['checkout', 'HEAD', '--', '.'], { cwd: projectPath })
+                files = await readProjectFiles(projectPath)
+              } catch {
+                // Leave the response empty if the repository cannot be restored.
+              }
+            }
           }
-
-          files.sort((left, right) => left.relativePath.localeCompare(right.relativePath))
 
           return json({
             projectPath,

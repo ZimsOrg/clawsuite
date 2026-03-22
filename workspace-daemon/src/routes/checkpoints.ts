@@ -141,6 +141,25 @@ function formatUntrackedFileDiff(filePath: string, content: string): string {
   ].join("\n");
 }
 
+function getFileDiffFromRawDiff(rawDiff: string, filePath: string): string {
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  const blocks = rawDiff.split("\ndiff --git ");
+
+  for (const [index, block] of blocks.entries()) {
+    const diffBlock = index === 0 ? block : `diff --git ${block}`;
+    const header = diffBlock.split("\n", 1)[0] ?? "";
+    if (
+      header.includes(` a/${normalizedPath} b/${normalizedPath}`) ||
+      header.includes(` a/${normalizedPath} `) ||
+      header.includes(` b/${normalizedPath}`)
+    ) {
+      return diffBlock.trim();
+    }
+  }
+
+  return "";
+}
+
 async function getWorkspaceFileDiff(workspacePath: string, filePath: string): Promise<string> {
   const trackedDiff = await tryGit(workspacePath, ["diff", "--no-ext-diff", "--", filePath]);
   if (trackedDiff) return trackedDiff;
@@ -160,8 +179,9 @@ async function getCheckpointFileDiff(input: {
   workspacePath: string | null;
   projectPath: string | null;
   commitHash: string | null;
+  rawDiff: string | null | undefined;
 }): Promise<string> {
-  const { filePath, workspacePath, projectPath, commitHash } = input;
+  const { filePath, workspacePath, projectPath, commitHash, rawDiff } = input;
 
   if (workspacePath) {
     const diff = await getWorkspaceFileDiff(workspacePath, filePath);
@@ -169,7 +189,12 @@ async function getCheckpointFileDiff(input: {
   }
 
   if (commitHash && projectPath) {
-    return tryGit(projectPath, ["show", "--format=", commitHash, "--", filePath]);
+    const diff = await tryGit(projectPath, ["show", "--format=", commitHash, "--", filePath]);
+    if (diff) return diff;
+  }
+
+  if (typeof rawDiff === "string") {
+    return getFileDiffFromRawDiff(rawDiff, filePath);
   }
 
   return "";
@@ -279,6 +304,7 @@ async function buildCheckpointDetail(tracker: Tracker, checkpointId: string) {
         workspacePath: checkpoint.task_run_workspace_path,
         projectPath: checkpoint.project_path,
         commitHash: checkpoint.commit_hash,
+        rawDiff: checkpoint.raw_diff,
       }),
     })),
   );
@@ -357,8 +383,23 @@ export function createCheckpointsRouter(tracker: Tracker, orchestrator: Orchestr
   router.get("/", (req, res) => {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const projectId = typeof req.query.project_id === "string" ? req.query.project_id : undefined;
+    const missionId = typeof req.query.mission_id === "string" ? req.query.mission_id : undefined;
     const taskRunId = typeof req.query.task_run_id === "string" ? req.query.task_run_id : undefined;
-    res.json(tracker.listCheckpoints(status, projectId, taskRunId));
+    const checkpoints = tracker.listCheckpoints(status, projectId, taskRunId);
+
+    if (!missionId) {
+      res.json(checkpoints);
+      return;
+    }
+
+    const taskRunIds = new Set(
+      tracker
+        .listTaskRuns(projectId ? { projectId } : {})
+        .filter((taskRun) => taskRun.mission_id === missionId)
+        .map((taskRun) => taskRun.id),
+    );
+
+    res.json(checkpoints.filter((checkpoint) => taskRunIds.has(checkpoint.task_run_id)));
   });
 
   router.get("/:id", async (req, res) => {
