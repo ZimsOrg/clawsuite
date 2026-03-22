@@ -926,9 +926,9 @@ export class Tracker extends EventEmitter {
     const hasPendingCheckpoint = taskRows.some(
       (row) => row.latest_checkpoint_status === 'pending',
     )
-    const hasRevisingTask = taskRows.some(
+    const hasRevisionWork = taskRows.some(
       (row) =>
-        row.status === 'running' &&
+        row.status !== 'completed' &&
         (row.previous_checkpoint_status === 'rejected' ||
           row.previous_checkpoint_status === 'revised' ||
           row.previous_run_status === 'failed'),
@@ -939,7 +939,7 @@ export class Tracker extends EventEmitter {
     let nextStatus: MissionStatus = mission.status
     if (hasPendingCheckpoint) {
       nextStatus = 'reviewing'
-    } else if (hasRevisingTask) {
+    } else if (hasRevisionWork) {
       nextStatus = 'revising'
     } else if (allCompleted) {
       nextStatus = 'completed'

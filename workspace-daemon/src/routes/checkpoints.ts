@@ -740,6 +740,7 @@ export function createCheckpointsRouter(tracker: Tracker, orchestrator: Orchestr
       null,
       taskRun.attempt + 1,
     );
+    tracker.updateMissionLifecycleStatus(task.mission_id, "revising");
     tracker.setTaskStatus(task.id, "pending");
     let triggered = false;
     try {

@@ -1008,6 +1008,7 @@ export class MissionLoop {
       this.tracker.updateCheckpointStatus(checkpointId, "revised", feedback);
     }
     this.tracker.createPendingTaskRun(task.id, task.agent_id, null, attempt + 1);
+    this.tracker.updateMissionLifecycleStatus(task.mission_id, "revising");
     this.tracker.setTaskStatus(task.id, "pending");
     this.tracker.refreshMissionTaskStatuses(task.mission_id);
     this.requestTick();
