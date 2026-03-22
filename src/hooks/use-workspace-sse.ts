@@ -5,8 +5,13 @@ import { toast } from '@/components/ui/toast'
 const DAEMON_URL = ''
 const RECONNECT_DELAY_MS = 3_000
 const EVENTS_URL = DAEMON_URL ? `${DAEMON_URL}/api/workspace/events` : '/api/workspace/events'
+export const WORKSPACE_SSE_EVENT_NAME = 'workspace-sse'
 
 type QueryKey = Array<string>
+export type WorkspaceSseEvent = {
+  type: string
+  payload: Record<string, unknown> | null
+}
 
 function invalidateQueries(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -61,6 +66,15 @@ function getOutputLines(payload: Record<string, unknown>): string[] {
     .filter(Boolean)
 }
 
+function emitWorkspaceSseEvent(type: string, payload: Record<string, unknown> | null) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(
+    new CustomEvent<WorkspaceSseEvent>(WORKSPACE_SSE_EVENT_NAME, {
+      detail: { type, payload },
+    }),
+  )
+}
+
 export function useWorkspaceSse(options?: { silent?: boolean }) {
   const queryClient = useQueryClient()
   const [connected, setConnected] = useState(false)
@@ -107,6 +121,7 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
 
       es.addEventListener('task_run.started', (event) => {
         const payload = parseSseData(event)
+        emitWorkspaceSseEvent('task_run.started', payload)
         const runId =
           typeof payload?.task_run_id === 'string' ? payload.task_run_id : null
         if (runId) {
@@ -126,6 +141,7 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
       })
 
       es.addEventListener('task_run.updated', () => {
+        emitWorkspaceSseEvent('task_run.updated', null)
         invalidateQueries(queryClient, [
           ['workspace', 'task-runs'],
           ['workspace', 'mission-console'],
@@ -135,6 +151,7 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
 
       es.addEventListener('task_run.output', (event) => {
         const payload = parseSseData(event)
+        emitWorkspaceSseEvent('task_run.output', payload)
         const runId =
           typeof payload?.task_run_id === 'string' ? payload.task_run_id : null
         if (!runId) return
@@ -154,6 +171,8 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
       })
 
       es.addEventListener('task_run.completed', (event) => {
+        const payload = parseSseData(event)
+        emitWorkspaceSseEvent('task_run.completed', payload)
         invalidateQueries(queryClient, [
           ['workspace', 'task-runs'],
           ['workspace', 'missions'],
@@ -168,7 +187,6 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
           ['workspace', 'home', 'task-runs'],
         ])
 
-        const payload = parseSseData(event)
         const taskName =
           typeof payload?.task_name === 'string' && payload.task_name.trim().length > 0
             ? payload.task_name.trim()
@@ -195,7 +213,8 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
         }
       })
 
-      es.addEventListener('checkpoint.created', () => {
+      es.addEventListener('checkpoint.created', (event) => {
+        emitWorkspaceSseEvent('checkpoint.created', parseSseData(event))
         invalidateQueries(queryClient, [
           ['workspace', 'checkpoints'],
           ['workspace', 'projects'],
@@ -204,7 +223,8 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
         ])
       })
 
-      es.addEventListener('checkpoint.updated', () => {
+      es.addEventListener('checkpoint.updated', (event) => {
+        emitWorkspaceSseEvent('checkpoint.updated', parseSseData(event))
         invalidateQueries(queryClient, [
           ['workspace', 'checkpoints'],
           ['workspace', 'projects'],
@@ -213,7 +233,8 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
         ])
       })
 
-      es.addEventListener('mission.updated', () => {
+      es.addEventListener('mission.updated', (event) => {
+        emitWorkspaceSseEvent('mission.updated', parseSseData(event))
         invalidateQueries(queryClient, [
           ['workspace', 'missions'],
           ['workspace', 'mission-console'],
@@ -226,14 +247,16 @@ export function useWorkspaceSse(options?: { silent?: boolean }) {
         ])
       })
 
-      es.addEventListener('agent.updated', () => {
+      es.addEventListener('agent.updated', (event) => {
+        emitWorkspaceSseEvent('agent.updated', parseSseData(event))
         invalidateQueries(queryClient, [
           ['workspace', 'agents'],
           ['workspace', 'agents-directory'],
         ])
       })
 
-      es.addEventListener('audit', () => {
+      es.addEventListener('audit', (event) => {
+        emitWorkspaceSseEvent('audit', parseSseData(event))
         invalidateQueries(queryClient, [['workspace', 'audit-log']])
       })
 

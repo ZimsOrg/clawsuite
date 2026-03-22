@@ -37,6 +37,7 @@ import { RunsConsoleScreen } from '@/screens/runs/runs-console-screen'
 import { WorkspaceSkillsScreen } from '@/screens/skills/workspace-skills-screen'
 import { TeamsScreen } from '@/screens/teams/teams-screen'
 import { WorkspaceMissionInput } from './workspace-mission-input'
+import { WorkspaceMissionMonitor } from './workspace-mission-monitor'
 import { WorkspaceRecentMissions } from './workspace-recent-missions'
 
 export type WorkspaceTab =
@@ -72,6 +73,12 @@ type ProjectContext = {
 type WorkspaceConfig = {
   autoApprove: boolean
   overseer: string | null
+}
+
+type MissionStatusPayload = {
+  mission?: {
+    status?: string
+  }
 }
 
 const TAB_LABELS: Record<WorkspaceTab, string> = {
@@ -264,6 +271,16 @@ export function WorkspaceLayout({ search }: WorkspaceLayoutProps) {
     return null
   }, [projectDetailQuery.data, search.missionId])
 
+  const missionStatusQuery = useQuery({
+    queryKey: ['workspace', 'layout', 'mission-status', search.missionId],
+    enabled: Boolean(search.missionId),
+    queryFn: async () =>
+      (await apiRequest(
+        `/api/workspace/missions/${encodeURIComponent(search.missionId ?? '')}/status`,
+      )) as MissionStatusPayload,
+    refetchInterval: 3_000,
+  })
+
   const projectName =
     projectContext.projectName ??
     projectDetailQuery.data?.name ??
@@ -282,6 +299,13 @@ export function WorkspaceLayout({ search }: WorkspaceLayoutProps) {
   }, [overseerValue])
   const pendingReviewCount = statsQuery.data?.checkpointsPending ?? 0
   const runningCount = statsQuery.data?.running ?? 0
+  const activeMissionStatus = missionStatusQuery.data?.mission?.status
+  const showMissionMonitor =
+    activeTab === 'projects' &&
+    Boolean(search.missionId) &&
+    (activeMissionStatus === 'running' ||
+      activeMissionStatus === 'reviewing' ||
+      activeMissionStatus === 'revising')
   const pageTitle =
     search.checkpointId
       ? 'Checkpoint Detail'
@@ -607,10 +631,14 @@ export function WorkspaceLayout({ search }: WorkspaceLayoutProps) {
           />
         ) : activeTab === 'projects' ? (
           search.missionId ? (
-            <MissionConsoleScreen
-              missionId={search.missionId}
-              projectId={activeProjectId}
-            />
+            showMissionMonitor ? (
+              <WorkspaceMissionMonitor missionId={search.missionId} />
+            ) : (
+              <MissionConsoleScreen
+                missionId={search.missionId}
+                projectId={activeProjectId}
+              />
+            )
           ) : (
             <ProjectsScreen
               replanSearch={search}
