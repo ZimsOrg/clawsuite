@@ -310,6 +310,10 @@ export function Conductor() {
       ),
     [taskRuns],
   )
+  const visibleProjectFiles = useMemo(
+    () => workspace.projectFiles.data?.files.filter((f) => !f.relativePath.startsWith('.workspace')) ?? [],
+    [workspace.projectFiles.data],
+  )
 
   // ── Live output from workspace SSE (task_run.output events) ───────────────
   const queryClient = useQueryClient()
@@ -602,68 +606,6 @@ export function Conductor() {
                 <h1 className="text-3xl font-semibold tracking-tight">{missionName}</h1>
               </div>
 
-              {/* Task results */}
-              <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Tasks</h2>
-                <div className="mt-4 space-y-2">
-                  {tasks.map((task) => {
-                    const td = getTaskStatusDot(task.status)
-                    return (
-                      <div key={task.id} className="flex items-center gap-3">
-                        <span className={cn('size-2.5 rounded-full', td.dotClass)} />
-                        <span className="flex-1 text-sm text-[var(--theme-text)]">{task.name}</span>
-                        <span className="text-xs text-[var(--theme-muted-2)]">{td.label}</span>
-                      </div>
-                    )
-                  })}
-                  {tasks.length === 0 && <p className="text-sm text-[var(--theme-muted)]">No task data available.</p>}
-                </div>
-              </div>
-
-              {failed && failedTaskRuns.length > 0 && (
-                <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-red-300">Failure Details</h2>
-                  <div className="mt-4 space-y-3">
-                    {failedTaskRuns.map((run) => (
-                      <div key={run.id} className="rounded-2xl bg-red-950/10 px-4 py-3">
-                        <p className="text-sm font-medium text-[var(--theme-text)]">
-                          {run.task_name ?? 'Task'}{run.agent_name ? ` · ${run.agent_name}` : ''}
-                        </p>
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-red-200">{run.error}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Checkpoints */}
-              {checkpoints.length > 0 && (
-                <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Checkpoints</h2>
-                  <div className="mt-4 space-y-2">
-                    {checkpoints.map((cp) => (
-                      <div key={cp.id} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--theme-card2)] px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-sm text-[var(--theme-text)]">{cp.diff_summary ?? `Checkpoint ${cp.id.slice(0, 8)}`}</p>
-                          <p className="text-xs text-[var(--theme-muted-2)]">
-                            {cp.files_changed != null && `${cp.files_changed} files`}
-                            {cp.additions != null && ` +${cp.additions}`}
-                            {cp.deletions != null && ` -${cp.deletions}`}
-                          </p>
-                        </div>
-                        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                          cp.status === 'approved' ? 'bg-emerald-500/15 text-emerald-400' :
-                          cp.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
-                          'bg-amber-500/15 text-amber-400',
-                        )}>
-                          {cp.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {workspace.projectFiles.data && (
                 <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -676,12 +618,12 @@ export function Conductor() {
                       </p>
                     </div>
                     <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-1 text-xs text-[var(--theme-muted)]">
-                      {workspace.projectFiles.data.files.length} files
+                      {visibleProjectFiles.length} files
                     </span>
                   </div>
 
                   <div className="mt-4 space-y-3">
-                    {workspace.projectFiles.data.files.map((file) => {
+                    {visibleProjectFiles.map((file) => {
                       const isHtmlFile = file.relativePath.endsWith('.html') && Boolean(file.content)
                       const mode = fileViewMode[file.relativePath] ?? 'preview'
 
@@ -738,7 +680,7 @@ export function Conductor() {
                               <iframe
                                 srcDoc={file.content}
                                 sandbox="allow-scripts"
-                                className="h-[300px] w-full border-0 bg-white"
+                                className="h-[400px] w-full border-0 bg-white"
                                 title={file.relativePath}
                               />
                             ) : (
@@ -786,9 +728,75 @@ export function Conductor() {
                         </details>
                       )
                     })}
-                    {workspace.projectFiles.data.files.length === 0 && (
+                    {visibleProjectFiles.length === 0 && (
                       <p className="text-sm text-[var(--theme-muted)]">No output files found.</p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Checkpoints */}
+              {checkpoints.length > 0 && (
+                <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Checkpoints</h2>
+                  <div className="mt-4 space-y-2">
+                    {checkpoints.map((cp) => (
+                      <div key={cp.id} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--theme-card2)] px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-[var(--theme-text)]">
+                            {cp.diff_summary ?? (taskRuns.find((r) => r.id === cp.task_run_id)?.task_name ?? 'Review changes')}
+                          </p>
+                          <p className="text-xs text-[var(--theme-muted-2)]">
+                            {cp.files_changed != null && `${cp.files_changed} files`}
+                            {cp.additions != null && ` +${cp.additions}`}
+                            {cp.deletions != null && ` -${cp.deletions}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(cp.status === 'pending' || cp.status === 'awaiting_review') && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void workspace.approveCheckpoint.mutateAsync({ id: cp.id, action: 'merge' })}
+                                className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-medium text-emerald-300 transition-colors hover:bg-emerald-500/25"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void workspace.rejectCheckpoint.mutateAsync(cp.id)}
+                                className="rounded-full bg-red-500/10 px-3 py-1 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                            cp.status === 'approved' ? 'bg-emerald-500/15 text-emerald-400' :
+                            cp.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
+                            'bg-amber-500/15 text-amber-400',
+                          )}>
+                            {cp.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {failed && failedTaskRuns.length > 0 && (
+                <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-red-300">Failure Details</h2>
+                  <div className="mt-4 space-y-3">
+                    {failedTaskRuns.map((run) => (
+                      <div key={run.id} className="rounded-2xl bg-red-950/10 px-4 py-3">
+                        <p className="text-sm font-medium text-[var(--theme-text)]">
+                          {run.task_name ?? 'Task'}{run.agent_name ? ` · ${run.agent_name}` : ''}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-red-200">{run.error}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -817,6 +825,22 @@ export function Conductor() {
               <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)] p-4">
                 <p className="text-xs text-[var(--theme-muted)]">Checkpoints</p>
                 <p className="mt-1 text-xl font-semibold text-[var(--theme-text)]">{checkpoints.length}</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-bg)] p-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Tasks</h2>
+                <div className="mt-4 space-y-2">
+                  {tasks.map((task) => {
+                    const td = getTaskStatusDot(task.status)
+                    return (
+                      <div key={task.id} className="flex items-center gap-3">
+                        <span className={cn('size-2.5 rounded-full', td.dotClass)} />
+                        <span className="flex-1 text-sm text-[var(--theme-text)]">{task.name}</span>
+                        <span className="text-xs text-[var(--theme-muted-2)]">{td.label}</span>
+                      </div>
+                    )
+                  })}
+                  {tasks.length === 0 && <p className="text-sm text-[var(--theme-muted)]">No task data available.</p>}
+                </div>
               </div>
             </div>
           </aside>
@@ -1060,7 +1084,9 @@ export function Conductor() {
                               onClick={() => setExpandedCheckpointId(isExpanded ? null : cp.id)}
                               className="min-w-0 flex-1 text-left"
                             >
-                              <p className="text-sm text-[var(--theme-text)]">{cp.diff_summary ?? `Checkpoint ${cp.id.slice(0, 8)}`}</p>
+                              <p className="text-sm text-[var(--theme-text)]">
+                                {cp.diff_summary ?? (taskRuns.find((r) => r.id === cp.task_run_id)?.task_name ?? 'Review changes')}
+                              </p>
                               <p className="text-[10px] text-[var(--theme-muted-2)]">
                                 {cp.files_changed != null && `${cp.files_changed} files`}
                                 {cp.additions != null && ` +${cp.additions}`}
