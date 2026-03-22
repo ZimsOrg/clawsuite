@@ -107,6 +107,10 @@ const HEARTBEAT_TIMEOUT_MS = 20000
 const HANDSHAKE_TIMEOUT_MS = 15000
 const RPC_TIMEOUT_MS = 30000
 
+// ── Circuit breaker ───────────────────────────────────────────────
+const CIRCUIT_BREAKER_THRESHOLD = 5    // consecutive failures to trip
+const CIRCUIT_BREAKER_COOLDOWN_MS = 15000 // how long to stay open
+
 export function getGatewayConfig() {
   // Check if browser set a custom gateway URL (for network/mobile access)
   const browserUrl = typeof window !== 'undefined' ? (window as any).__GATEWAY_URL__ : undefined
@@ -196,6 +200,11 @@ class GatewayClient {
   private destroyed = false
   private _lastErrorKind: import('../lib/connection-errors').ConnectionErrorKind | null = null
 
+  // Circuit breaker: prevent request floods when gateway is unreachable
+  private circuitFailures = 0
+  private circuitOpen = false
+  private circuitOpenedAt = 0
+
   get lastErrorKind() { return this._lastErrorKind }
 
   private requestQueue: Array<PendingRequest> = []
@@ -225,14 +234,35 @@ class GatewayClient {
       throw new Error('Gateway client is shut down')
     }
 
+    // Circuit breaker: fast-fail when gateway is known-unreachable
+    if (this.circuitOpen) {
+      if (Date.now() - this.circuitOpenedAt < CIRCUIT_BREAKER_COOLDOWN_MS) {
+        throw new Error(`Gateway circuit breaker open (${this.circuitFailures} consecutive failures, cooling down)`)
+      }
+      // Cooldown elapsed — allow one probe request through (half-open)
+      this.circuitOpen = false
+    }
+
     const requestId = randomUUID()
+    let settled = false
+
     const rpcCall = new Promise<TPayload>((resolve, reject) => {
       const request: PendingRequest = {
         id: requestId,
         method,
         params,
-        resolve: resolve as (value: unknown) => void,
-        reject,
+        resolve: (value: unknown) => {
+          if (settled) return
+          settled = true
+          this.circuitFailures = 0
+          this.circuitOpen = false
+          resolve(value as TPayload)
+        },
+        reject: (reason?: unknown) => {
+          if (settled) return
+          settled = true
+          reject(reason)
+        },
       }
 
       this.requestQueue.push(request)
@@ -244,8 +274,17 @@ class GatewayClient {
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        if (!this.cleanupPendingRequest(requestId)) return
-        console.warn(`[gateway] RPC timeout after ${RPC_TIMEOUT_MS}ms for ${method}`)
+        if (settled) return // RPC already resolved/rejected — skip
+        settled = true
+        this.cleanupPendingRequest(requestId)
+        this.circuitFailures += 1
+        if (this.circuitFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+          this.circuitOpen = true
+          this.circuitOpenedAt = Date.now()
+          console.warn(`[gateway] Circuit breaker OPEN after ${this.circuitFailures} consecutive timeouts (last: ${method})`)
+        } else {
+          console.warn(`[gateway] RPC timeout after ${RPC_TIMEOUT_MS}ms for ${method} (${this.circuitFailures}/${CIRCUIT_BREAKER_THRESHOLD})`)
+        }
         reject(new Error('Gateway RPC timeout'))
       }, RPC_TIMEOUT_MS)
     })
@@ -406,6 +445,9 @@ class GatewayClient {
         this.startHeartbeat()
         this.flushQueue()
         this._lastErrorKind = null
+        // Reset circuit breaker on successful connection
+        this.circuitFailures = 0
+        this.circuitOpen = false
         return // Success
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
@@ -763,9 +805,15 @@ if (!(globalThis as any)[GW_UHR_KEY]) {
       msg.includes('WebSocket') ||
       msg.includes('ECONNREFUSED') ||
       msg.includes('ECONNRESET') ||
-      msg.includes('unknown method')
+      msg.includes('unknown method') ||
+      msg.includes('RPC timeout') ||
+      msg.includes('circuit breaker') ||
+      msg.includes('shut down')
     ) {
-      console.warn(`[gateway] Swallowed unhandled rejection: ${msg}`)
+      // Avoid log spam — only log non-timeout rejections
+      if (!msg.includes('RPC timeout') && !msg.includes('circuit breaker')) {
+        console.warn(`[gateway] Swallowed unhandled rejection: ${msg}`)
+      }
       return
     }
     // Re-throw non-gateway rejections so they're visible
