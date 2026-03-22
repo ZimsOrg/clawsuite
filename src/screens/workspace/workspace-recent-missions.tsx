@@ -90,6 +90,10 @@ function matchesFilter(status: WorkspaceStatus, filter: MissionFilter): boolean 
   return FAILED_STATUSES.has(status)
 }
 
+function canViewLive(status: WorkspaceStatus): boolean {
+  return status === 'running' || status === 'reviewing' || status === 'revising'
+}
+
 export function WorkspaceRecentMissions() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState<MissionFilter>('all')
@@ -230,70 +234,100 @@ export function WorkspaceRecentMissions() {
           </div>
         ) : (
           pageItems.map((mission) => (
-            <button
+            <div
               key={mission.id}
-              type="button"
-              onClick={() => {
-                void navigate({
-                  to: '/workspace',
-                  hash: 'projects',
-                  search: {
-                    goal: undefined,
-                    checkpointId: undefined,
-                    phaseId: undefined,
-                    phaseName: mission.phaseName ?? undefined,
-                    project: undefined,
-                    projectId: mission.projectId,
-                    missionId: mission.id,
-                    showWizard: undefined,
-                  },
-                })
-              }}
               className="flex w-full flex-col gap-3 rounded-xl border border-primary-200 bg-white px-4 py-3 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/60 md:flex-row md:items-center md:justify-between"
             >
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-medium text-primary-900">
-                    {mission.name}
+              <button
+                type="button"
+                onClick={() => {
+                  void navigate({
+                    to: '/workspace',
+                    hash: 'projects',
+                    search: {
+                      goal: undefined,
+                      checkpointId: undefined,
+                      phaseId: undefined,
+                      phaseName: mission.phaseName ?? undefined,
+                      project: undefined,
+                      projectId: mission.projectId,
+                      missionId: canViewLive(mission.status) ? mission.id : undefined,
+                      showWizard: undefined,
+                    },
+                  })
+                }}
+                className="flex min-w-0 flex-1 flex-col gap-3 text-left sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-medium text-primary-900">
+                      {mission.name}
+                    </p>
+                    <span
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                        getMissionStatusBadgeClass(mission.status),
+                      )}
+                    >
+                      {formatStatus(mission.status)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-primary-600">
+                    {mission.projectName}
+                    {mission.phaseName ? ` / ${mission.phaseName}` : ''}
                   </p>
-                  <span
-                    className={cn(
-                      'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                      getMissionStatusBadgeClass(mission.status),
-                    )}
-                  >
-                    {formatStatus(mission.status)}
-                  </span>
                 </div>
-                <p className="text-sm text-primary-600">
-                  {mission.projectName}
-                  {mission.phaseName ? ` / ${mission.phaseName}` : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-primary-500">
-                <span>
-                  {mission.timestamp ? formatRelativeTime(mission.timestamp) : 'No activity yet'}
-                </span>
-                <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.7} />
-              </div>
-            </button>
+                <div className="flex items-center gap-3 text-xs text-primary-500">
+                  <span>
+                    {mission.timestamp ? formatRelativeTime(mission.timestamp) : 'No activity yet'}
+                  </span>
+                  <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.7} />
+                </div>
+              </button>
+
+              {canViewLive(mission.status) ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void navigate({
+                      to: '/workspace',
+                      hash: 'projects',
+                      search: {
+                        goal: undefined,
+                        checkpointId: undefined,
+                        phaseId: undefined,
+                        phaseName: mission.phaseName ?? undefined,
+                        project: undefined,
+                        projectId: mission.projectId,
+                        missionId: mission.id,
+                        showWizard: undefined,
+                      },
+                    })
+                  }}
+                  className="w-full bg-accent-500 text-white hover:bg-accent-500/90 sm:w-auto"
+                >
+                  View Live
+                </Button>
+              ) : null}
+            </div>
           ))
         )}
       </div>
 
       <div className="flex items-center justify-between border-t border-primary-200 bg-primary-50/60 px-5 py-4">
-        <span className="text-xs text-primary-600">
-          Page {safePage + 1} of {totalPages}
-        </span>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             disabled={safePage === 0}
             onClick={() => setPage((current) => Math.max(0, current - 1))}
+            className="min-w-9 px-3"
           >
-            Previous
+            ←
           </Button>
+          <span className="min-w-12 text-center text-xs text-primary-600">
+            {safePage + 1}/{totalPages}
+          </span>
           <Button
             variant="outline"
             size="sm"
@@ -301,8 +335,9 @@ export function WorkspaceRecentMissions() {
             onClick={() =>
               setPage((current) => Math.min(totalPages - 1, current + 1))
             }
+            className="min-w-9 px-3"
           >
-            Next
+            →
           </Button>
         </div>
       </div>

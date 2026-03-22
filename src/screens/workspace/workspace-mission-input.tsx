@@ -397,7 +397,7 @@ export function WorkspaceMissionInput({
   }
 
   return (
-    <section className="space-y-4">
+    <section className="mx-auto max-w-2xl space-y-4">
       <header className="flex flex-col gap-4 rounded-xl border border-primary-200 bg-primary-50/80 px-5 py-4 shadow-sm md:flex-row md:items-center md:justify-between">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-600">
@@ -433,7 +433,7 @@ export function WorkspaceMissionInput({
             placeholder="Describe the mission goal, constraints, and desired outcome."
             className="min-h-[160px] w-full resize-none bg-white px-5 py-4 text-sm text-primary-900 outline-none placeholder:text-primary-500"
           />
-          <div className="flex flex-col gap-3 border-t border-primary-200 bg-primary-50/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 border-t border-primary-200 bg-primary-50/60 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((action) => (
                 <button
@@ -460,7 +460,7 @@ export function WorkspaceMissionInput({
             <Button
               onClick={handlePlanMission}
               disabled={!connected || !goalDraft.trim() || decomposeMutation.isPending}
-              className="bg-accent-500 text-white hover:bg-accent-500/90"
+              className="w-full bg-accent-500 text-white hover:bg-accent-500/90 sm:w-auto"
             >
               {decomposeMutation.isPending ? 'Planning...' : 'Plan It'}
               <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
@@ -486,29 +486,43 @@ export function WorkspaceMissionInput({
           </div>
 
           <div className="space-y-4 px-5 py-4">
-            <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-500">
-                Mission Goal
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-primary-900">
-                {goalDraft.trim()}
-              </p>
-            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 sm:col-span-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-500">
+                  Mission Goal
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-primary-900">
+                  {goalDraft.trim()}
+                </p>
+              </div>
 
-            <label className="block space-y-1.5">
-              <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-primary-500">
-                Project Path
-              </span>
-              <Input
-                value={projectPathDraft}
-                onChange={(event) => {
-                  setProjectPathEdited(true)
-                  setProjectPathDraft(event.target.value)
-                }}
-                placeholder="/tmp/workspace-mission-..."
-                className="bg-white"
-              />
-            </label>
+              <label className="block space-y-1.5">
+                <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-primary-500">
+                  Project Path
+                </span>
+                <Input
+                  value={projectPathDraft}
+                  onChange={(event) => {
+                    setProjectPathEdited(true)
+                    setProjectPathDraft(event.target.value)
+                  }}
+                  placeholder="/tmp/workspace-mission-..."
+                  className="bg-white"
+                />
+              </label>
+
+              <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-primary-500">
+                  Launch Config
+                </p>
+                <p className="mt-2 text-sm font-medium text-primary-900">
+                  {enabledTasks.length} task{enabledTasks.length === 1 ? '' : 's'} selected
+                </p>
+                <p className="mt-1 text-sm text-primary-600">
+                  Edit task details below before starting the mission.
+                </p>
+              </div>
+            </div>
 
             {reviewTasks.map((task) => (
               <article
@@ -570,13 +584,14 @@ export function WorkspaceMissionInput({
             ))}
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-primary-200 bg-primary-50/60 px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 border-t border-primary-200 bg-primary-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <Button
               variant="outline"
               onClick={() => {
                 setLaunchError(null)
                 setReviewTasks(null)
               }}
+              className="w-full sm:w-auto"
             >
               Revise Plan
             </Button>
@@ -587,7 +602,7 @@ export function WorkspaceMissionInput({
                 enabledTasks.length === 0 ||
                 startMissionMutation.isPending
               }
-              className="bg-accent-500 text-white hover:bg-accent-500/90"
+              className="w-full bg-accent-500 text-white hover:bg-accent-500/90 sm:w-auto"
             >
               {startMissionMutation.isPending ? 'Starting...' : 'Start Mission'}
               <HugeiconsIcon icon={Rocket01Icon} size={16} strokeWidth={1.7} />
