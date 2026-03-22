@@ -256,6 +256,8 @@ const config = defineConfig(({ mode, command }) => {
       // Force IPv4 — 'localhost' resolves to ::1 (IPv6) on Windows, breaking gateway connectivity
       host: allowedHosts.length > 0 ? '0.0.0.0' : '127.0.0.1',
       allowedHosts: allowedHosts.length > 0 ? [...allowedHosts, '127.0.0.1', 'localhost'] : ['127.0.0.1', 'localhost'],
+      // HMR over Tailscale/reverse proxy: use client's origin so WS connects back through :443
+      hmr: allowedHosts.length > 0 ? { clientPort: 443, protocol: 'wss' } : undefined,
       proxy: {
         // WebSocket proxy: clients connect to /ws-gateway on the ClawSuite
         // server (any IP/port), which internally forwards to the local gateway.
