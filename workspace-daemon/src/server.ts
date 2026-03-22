@@ -176,7 +176,7 @@ export function createServer(): {
   app.use("/api/workspace/decompose", createDecomposeRouter(tracker));
   app.use("/api/workspace/teams", createTeamsRouter(tracker));
   app.use("/api/workspace/skills", createSkillsRouter());
-  app.use("/api/workspace/dispatch", createDispatchRouter());
+  app.use("/api/workspace/dispatch", createDispatchRouter(tracker));
   app.use("/api/workspace/overseer", createOverseerRouter(tracker, openclawClient));
 
   const eventsRouter = Router();

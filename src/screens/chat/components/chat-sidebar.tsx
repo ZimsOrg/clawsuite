@@ -17,6 +17,7 @@ import {
   Notification03Icon,
   PencilEdit02Icon,
   PuzzleIcon,
+  Rocket01Icon,
   Search01Icon,
   ApiIcon,
   Settings01Icon,
@@ -985,6 +986,13 @@ function ChatSidebarComponent({
       icon: ListViewIcon,
       label: 'Workspace',
       active: pathname.startsWith('/workspace'),
+    },
+    {
+      kind: 'link',
+      to: '/conductor',
+      icon: Rocket01Icon,
+      label: 'Conductor',
+      active: pathname.startsWith('/conductor'),
     },
   ]
 
