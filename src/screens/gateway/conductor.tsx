@@ -627,7 +627,11 @@ export function Conductor() {
                       const isHtmlFile = file.relativePath.endsWith('.html') && Boolean(file.content)
                       const mode = fileViewMode[file.relativePath] ?? 'preview'
 
-                      if (isHtmlFile) {
+                      // Detect React/Vite shell HTML (has module script, not self-contained)
+                      const isAppShell = isHtmlFile && file.content!.includes('type="module"')
+                      const isStandaloneHtml = isHtmlFile && !isAppShell
+
+                      if (isStandaloneHtml) {
                         return (
                           <div
                             key={file.relativePath}
@@ -692,6 +696,56 @@ export function Conductor() {
                                 />
                               </div>
                             )}
+                          </div>
+                        )
+                      }
+
+                      // Auto-expand main source files (tsx/jsx pages/components)
+                      const isMainSource = /\.(tsx|jsx)$/.test(file.relativePath) &&
+                        /(page|home|app|index|main)\.(tsx|jsx)$/i.test(file.relativePath)
+                      // isConfigFile can be used later for sorting/grouping
+                      const _isConfigFile = /^[^/]*\.(json|ts|js|css)$/.test(file.relativePath.split('/').pop() ?? '') &&
+                        !isMainSource
+                      void _isConfigFile
+
+                      // App shell HTML — show notice, not blank iframe
+                      if (isAppShell) {
+                        return (
+                          <div
+                            key={file.relativePath}
+                            className="flex items-center gap-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-4 py-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-[var(--theme-text)]">{file.relativePath}</p>
+                              <p className="text-xs text-[var(--theme-muted-2)]">App shell — requires build to preview</p>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      // Main source files — show expanded by default
+                      if (isMainSource && file.content) {
+                        return (
+                          <div
+                            key={file.relativePath}
+                            className="overflow-hidden rounded-2xl border border-[var(--theme-accent)]/30 bg-[var(--theme-card2)]"
+                          >
+                            <div className="flex items-center justify-between border-b border-[var(--theme-border)] px-4 py-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-[var(--theme-text)]">{file.relativePath}</p>
+                                <p className="text-xs text-[var(--theme-accent)]">Main component</p>
+                              </div>
+                              <span className="rounded-full bg-[var(--theme-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--theme-accent-strong)]">
+                                {formatFileSize(file.size)}
+                              </span>
+                            </div>
+                            <div className="max-h-[400px] overflow-auto bg-[var(--theme-bg)] p-3">
+                              <CodeBlock
+                                content={file.content}
+                                language={getCodeLanguage(file.relativePath)}
+                                className="border-[var(--theme-border)]"
+                              />
+                            </div>
                           </div>
                         )
                       }
