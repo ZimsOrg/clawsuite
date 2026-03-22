@@ -144,14 +144,33 @@ export function Conductor() {
   const [goalDraft, setGoalDraft] = useState('')
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
   const [decomposedTasks, setDecomposedTasks] = useState<DecomposedTask[] | null>(null)
-  const [activeMissionId, setActiveMissionId] = useState<string | null>(null)
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [activeMissionId, setActiveMissionId] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('conductor-active-mission')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return typeof parsed?.missionId === 'string' ? parsed.missionId : null
+      }
+    } catch {}
+    return null
+  })
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('conductor-active-mission')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return typeof parsed?.projectId === 'string' ? parsed.projectId : null
+      }
+    } catch {}
+    return null
+  })
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [launchError, setLaunchError] = useState<string | null>(null)
   const [terminalExpanded, setTerminalExpanded] = useState(false)
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [liveOutputTick, setLiveOutputTick] = useState(0)
+  const [fileViewMode, setFileViewMode] = useState<Record<string, 'preview' | 'source'>>({})
 
   // ── Workspace hook ────────────────────────────────────────────────────────
   const workspace = useConductorWorkspace({
@@ -185,6 +204,17 @@ export function Conductor() {
       window.clearInterval(liveId)
     }
   }, [phase])
+
+  useEffect(() => {
+    if (activeMissionId) {
+      localStorage.setItem(
+        'conductor-active-mission',
+        JSON.stringify({ missionId: activeMissionId, projectId: activeProjectId }),
+      )
+    } else {
+      localStorage.removeItem('conductor-active-mission')
+    }
+  }, [activeMissionId, activeProjectId])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -235,12 +265,14 @@ export function Conductor() {
   }, [activeMissionId, workspace.stopMission])
 
   const handleNewMission = useCallback(() => {
+    localStorage.removeItem('conductor-active-mission')
     setActiveMissionId(null)
     setActiveProjectId(null)
     setDecomposedTasks(null)
     setGoalDraft('')
     setSelectedAction('build')
     setSelectedTaskId(null)
+    setFileViewMode({})
     setLaunchError(null)
   }, [])
 
@@ -311,6 +343,10 @@ export function Conductor() {
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank', 'noopener,noreferrer')
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }, [])
+
+  const toggleFileView = useCallback((filePath: string, mode: 'preview' | 'source') => {
+    setFileViewMode((prev) => ({ ...prev, [filePath]: mode }))
   }, [])
 
   // Map task_id → run for quick lookup
@@ -645,50 +681,111 @@ export function Conductor() {
                   </div>
 
                   <div className="mt-4 space-y-3">
-                    {workspace.projectFiles.data.files.map((file) => (
-                      <details
-                        key={file.relativePath}
-                        className="overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)]"
-                      >
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[var(--theme-text)]">
-                              {file.relativePath}
-                            </p>
-                            <p className="text-xs text-[var(--theme-muted-2)]">
-                              {formatFileSize(file.size)} · {file.isText ? 'Text' : 'Binary'}
-                            </p>
+                    {workspace.projectFiles.data.files.map((file) => {
+                      const isHtmlFile = file.relativePath.endsWith('.html') && Boolean(file.content)
+                      const mode = fileViewMode[file.relativePath] ?? 'preview'
+
+                      if (isHtmlFile) {
+                        return (
+                          <div
+                            key={file.relativePath}
+                            className="overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)]"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--theme-border)] px-4 py-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-[var(--theme-text)]">
+                                  {file.relativePath}
+                                </p>
+                                <p className="text-xs text-[var(--theme-muted-2)]">
+                                  {formatFileSize(file.size)} · {file.isText ? 'Text' : 'Binary'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleFileView(file.relativePath, 'preview')}
+                                  className={cn(
+                                    'rounded-md px-2 py-1 text-[10px] font-medium transition-colors',
+                                    mode === 'preview'
+                                      ? 'bg-[var(--theme-accent-soft)] text-[var(--theme-accent-strong)]'
+                                      : 'text-[var(--theme-muted)] hover:text-[var(--theme-text)]',
+                                  )}
+                                >
+                                  Preview
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleFileView(file.relativePath, 'source')}
+                                  className={cn(
+                                    'rounded-md px-2 py-1 text-[10px] font-medium transition-colors',
+                                    mode === 'source'
+                                      ? 'bg-[var(--theme-accent-soft)] text-[var(--theme-accent-strong)]'
+                                      : 'text-[var(--theme-muted)] hover:text-[var(--theme-text)]',
+                                  )}
+                                >
+                                  Source
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenHtmlPreview(file.content!)}
+                                  className="rounded-full border border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--theme-accent-strong)] transition-colors hover:bg-[var(--theme-accent-soft-strong)]"
+                                >
+                                  Open Preview
+                                </button>
+                              </div>
+                            </div>
+                            {mode === 'preview' ? (
+                              <iframe
+                                srcDoc={file.content}
+                                sandbox="allow-scripts"
+                                className="h-[300px] w-full border-0 bg-white"
+                                title={file.relativePath}
+                              />
+                            ) : (
+                              <div className="bg-[var(--theme-bg)] p-3">
+                                <CodeBlock
+                                  content={file.content!}
+                                  language="html"
+                                  className="border-[var(--theme-border)]"
+                                />
+                              </div>
+                            )}
                           </div>
-                          {file.relativePath.endsWith('.html') && file.content ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.preventDefault()
-                                handleOpenHtmlPreview(file.content!)
-                              }}
-                              className="rounded-full border border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--theme-accent-strong)] transition-colors hover:bg-[var(--theme-accent-soft-strong)]"
-                            >
-                              Open Preview
-                            </button>
-                          ) : (
+                        )
+                      }
+
+                      return (
+                        <details
+                          key={file.relativePath}
+                          className="overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)]"
+                        >
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-[var(--theme-text)]">
+                                {file.relativePath}
+                              </p>
+                              <p className="text-xs text-[var(--theme-muted-2)]">
+                                {formatFileSize(file.size)} · {file.isText ? 'Text' : 'Binary'}
+                              </p>
+                            </div>
                             <span className="text-xs text-[var(--theme-muted-2)]">Expand</span>
+                          </summary>
+                          {file.isText && file.content ? (
+                            <div className="border-t border-[var(--theme-border)] bg-[var(--theme-bg)] p-3">
+                              <CodeBlock
+                                content={file.content}
+                                language={getCodeLanguage(file.relativePath)}
+                                className="border-[var(--theme-border)]"
+                              />
+                            </div>
+                          ) : (
+                            <div className="border-t border-[var(--theme-border)] px-4 py-3 text-sm text-[var(--theme-muted)]">
+                              Preview unavailable for this file.
+                            </div>
                           )}
-                        </summary>
-                        {file.isText && file.content ? (
-                          <div className="border-t border-[var(--theme-border)] bg-[var(--theme-bg)] p-3">
-                            <CodeBlock
-                              content={file.content}
-                              language={getCodeLanguage(file.relativePath)}
-                              className="border-[var(--theme-border)]"
-                            />
-                          </div>
-                        ) : (
-                          <div className="border-t border-[var(--theme-border)] px-4 py-3 text-sm text-[var(--theme-muted)]">
-                            Preview unavailable for this file.
-                          </div>
-                        )}
-                      </details>
-                    ))}
+                        </details>
+                      )
+                    })}
                     {workspace.projectFiles.data.files.length === 0 && (
                       <p className="text-sm text-[var(--theme-muted)]">No output files found.</p>
                     )}
