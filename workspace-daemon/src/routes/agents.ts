@@ -5,6 +5,18 @@ import type { UpdateAgentInput } from "../types";
 export function createAgentsRouter(tracker: Tracker): Router {
   const router = Router();
 
+  router.get("/available", (_req, res) => {
+    res.json([
+      { id: 'auto', name: 'Auto-select', description: 'Automatically picks the best agent for the task type' },
+      { id: 'codex', name: 'Codex (Free)', description: 'OpenAI Codex - best for coding tasks', model: 'openai-codex/gpt-5.4' },
+      { id: 'sonnet', name: 'Claude Sonnet', description: 'Claude Sonnet 4.6 - strong reasoning and review', model: 'anthropic-oauth/claude-sonnet-4-6' },
+      { id: 'minimax-fast', name: 'MiniMax Fast', description: 'MiniMax Lightning - fast and cheap for research', model: 'minimax/MiniMax-M2.5-Lightning' },
+      { id: 'researcher', name: 'Researcher', description: 'Optimized for web research and synthesis' },
+      { id: 'planner', name: 'Planner', description: 'Task decomposition and planning' },
+      { id: 'critic', name: 'Critic', description: 'Code review and quality assessment' },
+    ]);
+  });
+
   router.get("/", (_req, res) => {
     const agents = tracker.listAgentDirectory().map((agent) => ({
       ...agent,

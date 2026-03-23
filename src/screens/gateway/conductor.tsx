@@ -821,10 +821,25 @@ export function Conductor() {
                     <p className="text-sm font-medium text-[var(--theme-text)]">{task.title}</p>
                     {task.description && <p className="mt-0.5 text-xs text-[var(--theme-muted)]">{task.description}</p>}
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {task.agent && (
-                        <span className="inline-block rounded-full border border-[var(--theme-border)] px-2 py-0.5 text-[10px] text-[var(--theme-muted-2)]">
-                          {task.agent}
-                        </span>
+                      {true && (
+                        <select
+                          value={task.suggested_agent_type || 'auto'}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            e.stopPropagation()
+                            setDecomposedTasks((prev) =>
+                              prev ? prev.map((t, j) => j === i ? { ...t, agent: e.target.value, suggested_agent_type: e.target.value } : t) : prev
+                            )
+                          }}
+                          className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-2 py-0.5 text-[10px] text-[var(--theme-muted-2)] outline-none"
+                        >
+                          <option value="auto">Auto-select</option>
+                          <option value="codex">Codex (Free)</option>
+                          <option value="sonnet">Claude Sonnet</option>
+                          <option value="minimax-fast">MiniMax Fast</option>
+                          <option value="researcher">Researcher</option>
+                          <option value="planner">Planner</option>
+                        </select>
                       )}
                       {task.depends_on.map((dependency) => (
                         <span
