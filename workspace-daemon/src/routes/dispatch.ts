@@ -21,13 +21,31 @@ const STATE_PATH = join(
 
 function fireDispatchTrigger(missionId: string, mission: string): void {
   const text = `[dispatch] Mission started: ${missionId}. Goal: "${mission.slice(0, 100)}". Read data/dispatch-state.json and run the workspace-dispatch skill loop now.`;
-  execFile("openclaw", ["system", "event", "--text", text, "--mode", "now"], (err) => {
-    if (err) {
-      console.error("[dispatch] Failed to fire system event:", err.message);
-    } else {
-      console.log("[dispatch] System event fired for", missionId);
-    }
-  });
+
+  // Try wake first (reaches active session), fall back to system event
+  const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL ?? "http://127.0.0.1:18789";
+  fetch(`${gatewayUrl}/api/cron/wake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, mode: "now" }),
+  })
+    .then((res) => {
+      if (res.ok) {
+        console.log("[dispatch] Wake event sent for", missionId);
+      } else {
+        throw new Error(`Wake returned ${res.status}`);
+      }
+    })
+    .catch(() => {
+      // Fallback to CLI system event
+      execFile("openclaw", ["system", "event", "--text", text, "--mode", "now"], (err) => {
+        if (err) {
+          console.error("[dispatch] Failed to fire system event:", err.message);
+        } else {
+          console.log("[dispatch] System event (CLI fallback) fired for", missionId);
+        }
+      });
+    });
 }
 
 export function createDispatchRouter(tracker?: Tracker): Router {
