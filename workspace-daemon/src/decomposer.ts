@@ -1,8 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import path from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
 import type { DecomposeResult, DecomposerContext, DecomposedTask, TaskAgentRole } from "./types";
+import { OpenClawClient } from "./openclaw-client";
 
 const SYSTEM_PROMPT = [
   "You are a task decomposition engine for an engineering workspace daemon.",
@@ -26,20 +23,14 @@ const VALID_AGENT_TYPES = new Set<TaskAgentRole>([
   "reviewer",
 ]);
 
-type OpenClawConfig = {
-  auth?: {
-    profiles?: Record<string, { apiKey?: string; api?: string }>
-  };
-  models?: {
-    providers?: Record<string, { apiKey?: string; api?: string }>
-  };
-};
-
 function buildPrompt(goal: string, context?: DecomposerContext): string {
   const lines = [
-    `System instructions: ${SYSTEM_PROMPT}`,
+    SYSTEM_PROMPT,
     "",
-    "Decompose the following goal into implementation tasks.",
+    "You are a task decomposition engine. Given a goal, return ONLY a valid JSON array (no markdown, no explanation).",
+    "Each item: { name, description, estimated_minutes, depends_on, suggested_agent_type }",
+    "suggested_agent_type: planner | coder | critic | researcher | null",
+    "",
     `Goal: ${goal.trim()}`,
   ];
 
@@ -58,6 +49,12 @@ function buildPrompt(goal: string, context?: DecomposerContext): string {
   }
 
   return lines.join("\n");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function extractJsonArray(raw: string): string | null {
@@ -147,60 +144,50 @@ function ensureClarifyTask(tasks: DecomposedTask[]): DecomposedTask[] {
   return tasks;
 }
 
-function readApiKeyValue(value: unknown): string {
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "";
-}
-
-async function readAnthropicApiKeyFromConfig(): Promise<string> {
-  const configPath = process.env.OPENCLAW_CONFIG_PATH?.trim() || path.join(homedir(), ".openclaw", "openclaw.json");
-
-  try {
-    const raw = await readFile(configPath, "utf8");
-    const config = JSON.parse(raw) as OpenClawConfig;
-
-    const profileKey = readApiKeyValue(config.auth?.profiles?.["anthropic:default"]?.apiKey)
-      || readApiKeyValue(config.auth?.profiles?.["anthropic:default"]?.api);
-    if (profileKey) {
-      return profileKey;
-    }
-
-    return readApiKeyValue(config.models?.providers?.anthropic?.apiKey)
-      || readApiKeyValue(config.models?.providers?.anthropic?.api);
-  } catch {
-    return "";
-  }
-}
-
 export class Decomposer {
+  private readonly openclawClient = new OpenClawClient();
+
   async decompose(goal: string, context?: DecomposerContext): Promise<DecomposeResult> {
     const prompt = buildPrompt(goal, context);
-
     let rawResponse = "";
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim() || (await readAnthropicApiKeyFromConfig());
+    let gatewayError = "";
 
-    if (anthropicApiKey) {
-      try {
-        console.log("[decomposer] Using Anthropic SDK");
-        const client = new Anthropic({ apiKey: anthropicApiKey });
-        const response = await client.messages.create({
-          model: "claude-haiku-4-5-20250514",
-          max_tokens: 2048,
-          messages: [{ role: "user", content: prompt }],
-        });
-        const firstBlock = response.content[0];
-        if (firstBlock?.type === "text" && firstBlock.text.trim().length > 0) {
-          rawResponse = firstBlock.text.trim();
-        } else {
-          throw new Error("Anthropic SDK returned no text content");
+    try {
+      const session = await this.openclawClient.spawnSession({
+        task: prompt,
+        mode: "run",
+        label: "decomposer",
+        runTimeoutSeconds: 60,
+      });
+
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < 60_000) {
+        const status = await this.openclawClient.getSessionStatus(session.sessionKey);
+        if (status.status === "completed") {
+          break;
         }
-      } catch {
-        // Fall through to single-task fallback
+
+        if (status.status === "failed" || status.status === "timeout") {
+          gatewayError = status.lastMessage?.trim() || `Gateway session ${status.status}`;
+          break;
+        }
+
+        await sleep(2_000);
       }
+
+      if (!gatewayError) {
+        const history = await this.openclawClient.getSessionHistory(session.sessionKey);
+        const assistantMessages = history.filter(
+          (message) => message.role === "assistant" && message.content.trim().length > 0,
+        );
+        rawResponse = assistantMessages.at(-1)?.content.trim() || "";
+        if (!rawResponse) {
+          gatewayError = "Gateway session returned no assistant response";
+        }
+      }
+    } catch (error) {
+      gatewayError = error instanceof Error ? error.message : "Gateway session failed";
     }
 
     if (!rawResponse) {
@@ -215,7 +202,7 @@ export class Decomposer {
             suggested_agent_type: null,
           },
         ],
-        rawResponse: anthropicApiKey ? "" : "Missing Anthropic API key",
+        rawResponse: gatewayError,
         parsed: false,
       };
     }
