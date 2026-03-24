@@ -257,10 +257,11 @@ export function Conductor() {
   const filteredSessions = (() => {
     const sessions = conductor.recentSessions
     if (activityFilter === 'all') return sessions
-    if (activityFilter === 'conductor') return sessions.filter((s) => (s.label as string)?.startsWith('worker-'))
-    if (activityFilter === 'running') return sessions.filter((s) => deriveSessionStatus(s as GatewaySession) === 'running')
-    if (activityFilter === 'completed') return sessions.filter((s) => deriveSessionStatus(s as GatewaySession) === 'completed')
-    return sessions.filter((s) => deriveSessionStatus(s as GatewaySession) === 'failed')
+    const conductorOnly = sessions.filter((s) => (s.label as string)?.startsWith('worker-'))
+    if (activityFilter === 'conductor') return conductorOnly
+    if (activityFilter === 'running') return conductorOnly.filter((s) => deriveSessionStatus(s as GatewaySession) === 'running')
+    if (activityFilter === 'completed') return conductorOnly.filter((s) => deriveSessionStatus(s as GatewaySession) === 'completed')
+    return conductorOnly.filter((s) => deriveSessionStatus(s as GatewaySession) === 'failed')
   })()
   const totalPages = Math.max(1, Math.ceil(filteredSessions.length / ACTIVITY_PAGE_SIZE))
   const safeActivityPage = Math.min(activityPage, totalPages - 1)
