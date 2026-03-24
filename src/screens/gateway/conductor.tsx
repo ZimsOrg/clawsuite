@@ -525,21 +525,15 @@ export function Conductor() {
             <section className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
               <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-border)] pb-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Live Stream</p>
-                  <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Streaming from /api/send-stream</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Mission Planning</p>
+                  <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Analyzing your request and preparing agents</p>
                 </div>
-                <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300">
-                  Decomposing
+                <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300 animate-pulse">
+                  Working
                 </span>
               </div>
-              <div className="mt-4 min-h-[320px] overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
-                {conductor.streamText ? (
-                  <Markdown className="max-h-[400px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">
-                    {conductor.streamText}
-                  </Markdown>
-                ) : (
-                  <PlanningIndicator />
-                )}
+              <div className="mt-4 flex min-h-[200px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
+                <PlanningIndicator />
               </div>
               {conductor.streamError && (
                 <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
