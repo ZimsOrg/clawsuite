@@ -9,6 +9,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { Markdown } from '@/components/prompt-kit/markdown'
+import { type GatewaySession } from '@/lib/gateway-api'
 import { cn } from '@/lib/utils'
 import { useConductorGateway } from './hooks/use-conductor-gateway'
 
@@ -298,6 +299,44 @@ export function Conductor() {
                 </Button>
               </div>
             </section>
+
+            {conductor.recentSessions.length > 0 && (
+              <section className="w-full space-y-3">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">
+                  Recent Activity
+                </h2>
+                <div className="space-y-1.5">
+                  {conductor.recentSessions.map((session) => {
+                    const recentSession = session as GatewaySession
+                    const label = recentSession.label ?? recentSession.key ?? ''
+                    const displayName = label.replace(/^worker-/, '').replace(/[-_]+/g, ' ')
+                    const tokens = typeof recentSession.totalTokens === 'number' ? recentSession.totalTokens : 0
+                    const model = getShortModelName(recentSession.model)
+                    const updatedAt =
+                      typeof recentSession.updatedAt === 'string'
+                        ? recentSession.updatedAt
+                        : typeof recentSession.startedAt === 'string'
+                          ? recentSession.startedAt
+                          : typeof recentSession.createdAt === 'string'
+                            ? recentSession.createdAt
+                            : null
+
+                    return (
+                      <div
+                        key={recentSession.key}
+                        className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2.5 text-sm"
+                      >
+                        <span className="size-2 rounded-full bg-emerald-400" />
+                        <span className="min-w-0 flex-1 truncate font-medium text-[var(--theme-text)] capitalize">{displayName}</span>
+                        <span className="text-xs text-[var(--theme-muted)]">{model}</span>
+                        <span className="text-xs text-[var(--theme-muted)]">{tokens.toLocaleString()} tok</span>
+                        <span className="text-xs text-[var(--theme-muted-2)]">{formatRelativeTime(updatedAt, Date.now())}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
           </div>
         </main>
       </div>

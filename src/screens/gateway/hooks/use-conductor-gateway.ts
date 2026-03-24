@@ -307,6 +307,31 @@ export function useConductorGateway() {
     refetchInterval: phase === 'decomposing' || phase === 'running' ? 3_000 : false,
   })
 
+  const recentSessionsQuery = useQuery({
+    queryKey: ['conductor', 'recent-sessions'],
+    queryFn: async () => {
+      const payload = await fetchSessions()
+      const sessions = Array.isArray(payload.sessions) ? payload.sessions : []
+      const cutoff = Date.now() - 24 * 60 * 60_000
+      return sessions
+        .filter((session) => {
+          const label = readString(session.label) ?? ''
+          const key = readString(session.key) ?? ''
+          const updatedAt = toIso(session.updatedAt ?? session.startedAt ?? session.createdAt)
+          if (!updatedAt) return false
+          return (label.startsWith('worker-') || key.includes(':subagent:')) && new Date(updatedAt).getTime() >= cutoff
+        })
+        .sort((a, b) => {
+          const updatedA = new Date(toIso(a.updatedAt ?? a.startedAt ?? a.createdAt) ?? 0).getTime()
+          const updatedB = new Date(toIso(b.updatedAt ?? b.startedAt ?? b.createdAt) ?? 0).getTime()
+          return updatedB - updatedA
+        })
+        .slice(0, 10)
+    },
+    enabled: phase === 'idle',
+    refetchInterval: false,
+  })
+
   const workers = sessionsQuery.data ?? []
   const activeWorkers = useMemo(
     () => workers.filter((worker) => worker.status === 'running' || worker.status === 'idle'),
@@ -508,6 +533,7 @@ export function useConductorGateway() {
     completedAt,
     workers,
     activeWorkers,
+    recentSessions: recentSessionsQuery.data ?? [],
     missionWorkerKeys,
     workerOutputs,
     sendMission: sendMission.mutateAsync,
