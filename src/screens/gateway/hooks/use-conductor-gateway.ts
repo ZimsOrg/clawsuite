@@ -319,10 +319,7 @@ function toWorker(session: GatewaySession): ConductorWorker | null {
   }
 }
 
-function extractWorkerLabels(text: string): string[] {
-  const matches = text.match(/worker-[a-z0-9][a-z0-9_-]*/gi) ?? []
-  return [...new Set(matches.map((match) => match.trim()))]
-}
+
 
 function extractHistoryMessageText(message: HistoryMessage | undefined): string {
   if (!message) return ''
@@ -356,85 +353,6 @@ async function fetchWorkerOutput(sessionKey: string, limit = 5): Promise<string>
   return getLastAssistantMessage(payload.messages)
 }
 
-async function readSseStream(response: Response, onEvent: (event: StreamEvent) => void): Promise<void> {
-  if (!response.ok) {
-    throw new Error((await response.text().catch(() => '')) || `Request failed (${response.status})`)
-  }
-
-  const reader = response.body?.getReader()
-  if (!reader) throw new Error('Streaming response unavailable')
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  const flushChunk = (chunk: string) => {
-    const blocks = chunk.split('\n\n')
-    buffer = blocks.pop() ?? ''
-
-    for (const block of blocks) {
-      const lines = block.split(/\r?\n/)
-      let eventName = 'message'
-      const dataLines: string[] = []
-
-      for (const line of lines) {
-        if (line.startsWith('event:')) eventName = line.slice(6).trim()
-        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-      }
-
-      if (dataLines.length === 0) continue
-
-      const rawData = dataLines.join('\n')
-      let payload: Record<string, unknown> = {}
-      try {
-        payload = JSON.parse(rawData) as Record<string, unknown>
-      } catch {
-        payload = { text: rawData }
-      }
-
-      const stream = readString(payload.stream) ?? eventName
-      const nestedData = readRecord(payload.data)
-      const eventPayload = nestedData ?? payload
-
-      if (stream === 'assistant') {
-        onEvent({ type: 'assistant', text: readString(eventPayload.text) ?? '' })
-      } else if (stream === 'thinking') {
-        onEvent({ type: 'thinking', text: readString(eventPayload.text) ?? '' })
-      } else if (stream === 'tool') {
-        onEvent({
-          type: 'tool',
-          name: readString(eventPayload.name) ?? undefined,
-          phase: readString(eventPayload.phase) ?? undefined,
-          data: nestedData ?? readRecord(payload.data) ?? undefined,
-        })
-      } else if (stream === 'done') {
-        onEvent({
-          type: 'done',
-          state: readString(eventPayload.state) ?? undefined,
-          message: readString(eventPayload.message) ?? readString(eventPayload.errorMessage) ?? undefined,
-        })
-      } else if (stream === 'started') {
-        onEvent({
-          type: 'started',
-          runId: readString(eventPayload.runId) ?? undefined,
-          sessionKey: readString(eventPayload.sessionKey) ?? undefined,
-        })
-      } else if (stream === 'error') {
-        onEvent({ type: 'error', message: readString(eventPayload.message) ?? 'Stream error' })
-      }
-    }
-  }
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    flushChunk(buffer)
-  }
-
-  if (buffer.trim()) {
-    flushChunk(`${buffer}\n\n`)
-  }
-}
 
 export function useConductorGateway() {
   const [initialMission] = useState<PersistedMission | null>(() => loadPersistedMission())
@@ -465,19 +383,33 @@ export function useConductorGateway() {
         .filter((session) => {
           const label = readString(session.label) ?? ''
           const key = readString(session.key) ?? ''
-          if (!label.startsWith('worker-') && !key.includes(':subagent:')) return false
 
-          if (missionWorkerKeys.size > 0) {
-            return missionWorkerKeys.has(key)
-          }
-
-          if (missionWorkerLabels.size > 0 && missionWorkerLabels.has(label)) {
+          // Match by known worker keys (includes orchestrator + any children it spawned)
+          if (missionWorkerKeys.size > 0 && missionWorkerKeys.has(key)) {
             return true
           }
 
-          const createdIso = toIso(session.createdAt ?? session.startedAt ?? session.updatedAt)
-          if (!createdIso || !missionStartMs) return false
-          return new Date(createdIso).getTime() >= missionStartMs
+          // Match by worker label pattern
+          if (label.startsWith('worker-') || label.startsWith('conductor-')) {
+            if (missionWorkerLabels.size > 0 && missionWorkerLabels.has(label)) {
+              return true
+            }
+            // Match by creation time (workers spawned after mission start)
+            const createdIso = toIso(session.createdAt ?? session.startedAt ?? session.updatedAt)
+            if (createdIso && missionStartMs && new Date(createdIso).getTime() >= missionStartMs) {
+              return true
+            }
+          }
+
+          // Match subagent sessions created after mission start
+          if (key.includes(':subagent:')) {
+            const createdIso = toIso(session.createdAt ?? session.startedAt ?? session.updatedAt)
+            if (createdIso && missionStartMs && new Date(createdIso).getTime() >= missionStartMs) {
+              return true
+            }
+          }
+
+          return false
         })
         .map(toWorker)
         .filter((session): session is ConductorWorker => session !== null)
@@ -733,75 +665,41 @@ export function useConductorGateway() {
       setMissionStartedAt(new Date().toISOString())
       setPhase('decomposing')
 
-      const response = await fetch('/api/send-stream', {
+      // Spawn a dedicated orchestrator session via the server
+      const response = await fetch('/api/conductor-spawn', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          sessionKey: 'agent:main:main',
-          message: `[DISPATCH] Read the workspace-dispatch skill at skills/workspace-dispatch/SKILL.md (relative to the ClawSuite project root) and execute this mission autonomously. Use sessions_spawn to create worker agents for each task. Do not ask for confirmation — start immediately.\n\nMission goal: ${trimmed}`,
-        }),
+        body: JSON.stringify({ goal: trimmed }),
       })
 
-      await readSseStream(response, (event) => {
-        setStreamEvents((current) => [...current, event])
-        if (event.type === 'assistant') {
-          setStreamText((current) => current + event.text)
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(text || `Spawn failed (${response.status})`)
+      }
 
-          if (!seenToolCallRef.current) {
-            setPlanText((current) => current + event.text)
-          }
+      const result = (await response.json()) as { ok?: boolean; sessionKey?: string; error?: string }
+      if (!result.ok || !result.sessionKey) {
+        throw new Error(result.error ?? 'Failed to spawn orchestrator')
+      }
 
-          const labels = extractWorkerLabels(event.text)
-          if (labels.length > 0) {
-            setMissionWorkerLabels((current) => {
-              const next = new Set(current)
-              let changed = false
-              for (const label of labels) {
-                if (!next.has(label)) {
-                  next.add(label)
-                  changed = true
-                }
-              }
-              return changed ? next : current
-            })
-          }
-        }
-        if (event.type === 'tool') {
-          seenToolCallRef.current = true
-          setPhase((current) => (current === 'decomposing' ? 'running' : current))
-        }
-        if (event.type === 'tool' && event.name === 'sessions_spawn' && event.phase === 'result') {
-          const childSessionKey = readString(event.data?.childSessionKey)
-          if (childSessionKey) {
-            setMissionWorkerKeys((current) => {
-              if (current.has(childSessionKey)) return current
-              const next = new Set(current)
-              next.add(childSessionKey)
-              return next
-            })
-          }
-        }
-        if (event.type === 'error') {
-          doneRef.current = true
-          if (missionWorkerKeys.size === 0) {
-            setStreamError(event.message)
-            setPhase('complete')
-            setCompletedAt(new Date().toISOString())
-          }
-        }
-        if (event.type === 'done') {
-          doneRef.current = true
-          setCompletedAt(new Date().toISOString())
-        }
+      // Track the orchestrator session key — it will spawn child workers
+      const orchestratorKey = result.sessionKey
+      setMissionWorkerKeys((current) => {
+        if (current.has(orchestratorKey)) return current
+        const next = new Set(current)
+        next.add(orchestratorKey)
+        return next
       })
+
+      // Transition to running — the orchestrator is alive, workers will appear via polling
+      setPlanText(`Orchestrator spawned. Decomposing mission and spawning workers...`)
+      setPhase('running')
     },
     onError: (error) => {
       doneRef.current = true
-      if (missionWorkerKeys.size === 0) {
-        setStreamError(error instanceof Error ? error.message : String(error))
-        setPhase('complete')
-        setCompletedAt(new Date().toISOString())
-      }
+      setStreamError(error instanceof Error ? error.message : String(error))
+      setPhase('complete')
+      setCompletedAt(new Date().toISOString())
     },
   })
 

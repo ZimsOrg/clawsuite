@@ -90,6 +90,7 @@ import { Route as ApiCostRouteImport } from './routes/api/cost'
 import { Route as ApiContextUsageRouteImport } from './routes/api/context-usage'
 import { Route as ApiConfigPatchRouteImport } from './routes/api/config-patch'
 import { Route as ApiConfigGetRouteImport } from './routes/api/config-get'
+import { Route as ApiConductorSpawnRouteImport } from './routes/api/conductor-spawn'
 import { Route as ApiCliAgentsRouteImport } from './routes/api/cli-agents'
 import { Route as ApiChatEventsRouteImport } from './routes/api/chat-events'
 import { Route as ApiChatAbortRouteImport } from './routes/api/chat-abort'
@@ -581,6 +582,11 @@ const ApiConfigPatchRoute = ApiConfigPatchRouteImport.update({
 const ApiConfigGetRoute = ApiConfigGetRouteImport.update({
   id: '/api/config-get',
   path: '/api/config-get',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiConductorSpawnRoute = ApiConductorSpawnRouteImport.update({
+  id: '/api/conductor-spawn',
+  path: '/api/conductor-spawn',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCliAgentsRoute = ApiCliAgentsRouteImport.update({
@@ -1095,6 +1101,7 @@ export interface FileRoutesByFullPath {
   '/api/chat-abort': typeof ApiChatAbortRoute
   '/api/chat-events': typeof ApiChatEventsRoute
   '/api/cli-agents': typeof ApiCliAgentsRouteWithChildren
+  '/api/conductor-spawn': typeof ApiConductorSpawnRoute
   '/api/config-get': typeof ApiConfigGetRoute
   '/api/config-patch': typeof ApiConfigPatchRoute
   '/api/context-usage': typeof ApiContextUsageRoute
@@ -1264,6 +1271,7 @@ export interface FileRoutesByTo {
   '/api/chat-abort': typeof ApiChatAbortRoute
   '/api/chat-events': typeof ApiChatEventsRoute
   '/api/cli-agents': typeof ApiCliAgentsRouteWithChildren
+  '/api/conductor-spawn': typeof ApiConductorSpawnRoute
   '/api/config-get': typeof ApiConfigGetRoute
   '/api/config-patch': typeof ApiConfigPatchRoute
   '/api/context-usage': typeof ApiContextUsageRoute
@@ -1435,6 +1443,7 @@ export interface FileRoutesById {
   '/api/chat-abort': typeof ApiChatAbortRoute
   '/api/chat-events': typeof ApiChatEventsRoute
   '/api/cli-agents': typeof ApiCliAgentsRouteWithChildren
+  '/api/conductor-spawn': typeof ApiConductorSpawnRoute
   '/api/config-get': typeof ApiConfigGetRoute
   '/api/config-patch': typeof ApiConfigPatchRoute
   '/api/context-usage': typeof ApiContextUsageRoute
@@ -1607,6 +1616,7 @@ export interface FileRouteTypes {
     | '/api/chat-abort'
     | '/api/chat-events'
     | '/api/cli-agents'
+    | '/api/conductor-spawn'
     | '/api/config-get'
     | '/api/config-patch'
     | '/api/context-usage'
@@ -1776,6 +1786,7 @@ export interface FileRouteTypes {
     | '/api/chat-abort'
     | '/api/chat-events'
     | '/api/cli-agents'
+    | '/api/conductor-spawn'
     | '/api/config-get'
     | '/api/config-patch'
     | '/api/context-usage'
@@ -1946,6 +1957,7 @@ export interface FileRouteTypes {
     | '/api/chat-abort'
     | '/api/chat-events'
     | '/api/cli-agents'
+    | '/api/conductor-spawn'
     | '/api/config-get'
     | '/api/config-patch'
     | '/api/context-usage'
@@ -2117,6 +2129,7 @@ export interface RootRouteChildren {
   ApiChatAbortRoute: typeof ApiChatAbortRoute
   ApiChatEventsRoute: typeof ApiChatEventsRoute
   ApiCliAgentsRoute: typeof ApiCliAgentsRouteWithChildren
+  ApiConductorSpawnRoute: typeof ApiConductorSpawnRoute
   ApiConfigGetRoute: typeof ApiConfigGetRoute
   ApiConfigPatchRoute: typeof ApiConfigPatchRoute
   ApiContextUsageRoute: typeof ApiContextUsageRoute
@@ -2747,6 +2760,13 @@ declare module '@tanstack/react-router' {
       path: '/api/config-get'
       fullPath: '/api/config-get'
       preLoaderRoute: typeof ApiConfigGetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/conductor-spawn': {
+      id: '/api/conductor-spawn'
+      path: '/api/conductor-spawn'
+      fullPath: '/api/conductor-spawn'
+      preLoaderRoute: typeof ApiConductorSpawnRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cli-agents': {
@@ -3711,6 +3731,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatAbortRoute: ApiChatAbortRoute,
   ApiChatEventsRoute: ApiChatEventsRoute,
   ApiCliAgentsRoute: ApiCliAgentsRouteWithChildren,
+  ApiConductorSpawnRoute: ApiConductorSpawnRoute,
   ApiConfigGetRoute: ApiConfigGetRoute,
   ApiConfigPatchRoute: ApiConfigPatchRoute,
   ApiContextUsageRoute: ApiContextUsageRoute,
