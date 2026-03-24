@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowRight01Icon,
-  Cancel01Icon,
   PlayIcon,
   Rocket01Icon,
   Search01Icon,
@@ -108,6 +107,19 @@ function getWorkerDot(status: 'running' | 'complete' | 'stale' | 'idle') {
   return { dotClass: 'bg-red-400', label: 'Stale' }
 }
 
+function getWorkerBorderClass(status: 'running' | 'complete' | 'stale' | 'idle') {
+  if (status === 'complete') return 'border-l-emerald-400'
+  if (status === 'running') return 'border-l-sky-400'
+  if (status === 'idle') return 'border-l-amber-400'
+  return 'border-l-red-400'
+}
+
+function getShortModelName(model: string | null | undefined): string {
+  if (!model) return 'Unknown'
+  const parts = model.split('/')
+  return parts[parts.length - 1] || model
+}
+
 function extractMessageText(message: HistoryMessage | undefined): string {
   if (!message) return ''
   if (typeof message.content === 'string') return message.content
@@ -134,7 +146,6 @@ function getLastAssistantMessage(messages: HistoryMessage[] | undefined): string
 function extractProjectPath(text: string): string | null {
   const matches = text.match(/\/tmp\/dispatch-[^\s"')`\]>]+/g) ?? []
   for (const raw of matches) {
-    // Strip trailing punctuation and markdown artifacts
     const cleaned = raw.replace(/[.,;:!?\-`]+$/, '')
     const normalized = cleaned.replace(/\/(index\.html|dist|build)\/?$/i, '')
     if (normalized.startsWith('/tmp/dispatch-')) return normalized
@@ -183,8 +194,10 @@ export function Conductor() {
 
   const totalWorkers = conductor.workers.length
   const completedWorkers = conductor.workers.filter((worker) => worker.status === 'complete').length
+  const activeWorkerCount = conductor.activeWorkers.length
   const missionProgress = totalWorkers > 0 ? Math.round((completedWorkers / totalWorkers) * 100) : 0
-  const selectedWorker = conductor.workers.find((worker) => worker.key === selectedWorkerKey) ?? null
+  const shouldCollapseLivePlanByDefault = totalWorkers > 0
+  const totalTokens = conductor.workers.reduce((sum, worker) => sum + worker.totalTokens, 0)
 
   const workerHistoryQuery = useQuery({
     queryKey: ['conductor', 'worker-history', selectedWorkerKey],
@@ -213,10 +226,22 @@ export function Conductor() {
     return extractProjectPath(`${conductor.streamText}\n${workerOutput}`)
   }, [conductor.streamText, conductor.workerOutputs, conductor.workers, selectedWorkerOutput])
 
+  const completeSummary = useMemo(() => {
+    if (!completePhaseProjectPath || completedWorkers !== totalWorkers || totalWorkers === 0) return null
+    return [
+      '✅ Mission completed successfully',
+      '',
+      `**Goal:** ${conductor.goal}`,
+      `**Workers:** ${totalWorkers} ran · ${totalTokens.toLocaleString()} tokens`,
+      `**Duration:** ${formatElapsedTime(conductor.missionStartedAt, now)}`,
+      `**Output:** ${completePhaseProjectPath}/index.html`,
+    ].join('\n')
+  }, [completePhaseProjectPath, completedWorkers, totalWorkers, conductor.goal, totalTokens, conductor.missionStartedAt, now])
+
   if (phase === 'home') {
     return (
       <div className="flex h-full min-h-full flex-col bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
-        <main className="mx-auto flex min-h-0 flex-1 w-full max-w-[720px] flex-col items-stretch justify-center px-6 py-8">
+        <main className="mx-auto flex min-h-0 w-full max-w-[720px] flex-1 flex-col items-stretch justify-center px-6 py-8">
           <div className="w-full space-y-8">
             <div className="space-y-3 text-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
@@ -246,7 +271,11 @@ export function Conductor() {
                       type="button"
                       onClick={() => {
                         setSelectedAction(action.id)
-                        setGoalDraft(action.prompt)
+                        setGoalDraft((current) => {
+                          const trimmed = current.trim()
+                          if (!trimmed) return action.prompt
+                          return `${action.label}: ${trimmed}`
+                        })
                       }}
                       className={cn(
                         'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
@@ -351,19 +380,29 @@ export function Conductor() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Aurora Summary</p>
-                  <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Final streamed response from the main session.</p>
+                  <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Clean delivery summary first, raw agent output only when you need to debug it.</p>
                 </div>
                 <span className="rounded-full border border-emerald-400/35 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
                   Complete
                 </span>
               </div>
               <div className="mt-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
-                {conductor.streamText ? (
+                {completeSummary ? (
+                  <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{completeSummary}</Markdown>
+                ) : conductor.streamText ? (
                   <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{conductor.streamText}</Markdown>
                 ) : (
                   <p className="text-sm text-[var(--theme-muted)]">No streamed summary captured.</p>
                 )}
               </div>
+              {conductor.streamText && completeSummary && (
+                <details className="mt-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
+                  <summary className="cursor-pointer text-sm font-medium text-[var(--theme-text)]">Raw Agent Output</summary>
+                  <div className="mt-4 border-t border-[var(--theme-border)] pt-4">
+                    <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{conductor.streamText}</Markdown>
+                  </div>
+                </details>
+              )}
             </section>
 
             {completePhaseProjectPath && (
@@ -382,6 +421,16 @@ export function Conductor() {
                     title="Mission output preview"
                   />
                 </div>
+                <div className="mt-4 flex justify-end">
+                  <a
+                    href={`/api/preview-file?path=${encodeURIComponent(`${completePhaseProjectPath}/index.html`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-sm font-medium text-[var(--theme-text)] transition-colors hover:border-[var(--theme-accent)] hover:bg-[var(--theme-card2)]"
+                  >
+                    Open in new tab ↗
+                  </a>
+                </div>
               </section>
             )}
 
@@ -390,87 +439,23 @@ export function Conductor() {
                 <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Workers Summary</h2>
               </div>
               <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-5 py-4">
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex flex-wrap items-center gap-4 text-sm">
                   <span className="text-[var(--theme-muted)]">{conductor.workers.length} worker{conductor.workers.length !== 1 ? 's' : ''} ran</span>
                   <span className="text-[var(--theme-muted)]">·</span>
-                  <span className="text-[var(--theme-muted)]">{conductor.workers.reduce((sum, w) => sum + w.totalTokens, 0).toLocaleString()} total tokens</span>
+                  <span className="text-[var(--theme-muted)]">{totalTokens.toLocaleString()} total tokens</span>
                   <span className="text-[var(--theme-muted)]">·</span>
-                  <span className="text-[var(--theme-muted)]">{conductor.workers.map(w => w.model).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'Unknown'}</span>
+                  <span className="text-[var(--theme-muted)]">{conductor.workers.map((w) => getShortModelName(w.model)).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'Unknown'}</span>
                 </div>
-              </div>
-            </section>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex h-full min-h-full flex-col overflow-hidden bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
-      <div className="border-b border-[var(--theme-border)] bg-[var(--theme-card)]/70 px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted-2)]">Conductor</p>
-            <h1 className="truncate text-2xl font-semibold tracking-tight text-[var(--theme-text)]">{conductor.goal}</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-1 text-xs font-medium text-[var(--theme-muted)]">
-              Elapsed: {formatElapsedTime(conductor.missionStartedAt, now)}
-            </span>
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-              {completedWorkers}/{Math.max(totalWorkers, 1)} · {missionProgress}%
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={conductor.resetMission}
-              className="rounded-xl border-[var(--theme-border)] bg-[var(--theme-card)] text-[var(--theme-text)] hover:border-[var(--theme-accent)] hover:bg-[var(--theme-card2)]"
-            >
-              Leave Mission
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-h-0 overflow-y-auto px-6 py-6">
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-            <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-border)] pb-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Aurora Live Plan</p>
-                  <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Streaming decomposition from the main gateway chat session.</p>
-                </div>
-                <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300">
-                  Running
-                </span>
-              </div>
-              <div className="mt-4 min-h-[220px] rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
-                {conductor.streamText ? (
-                  <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{conductor.streamText}</Markdown>
-                ) : (
-                  <p className="text-sm text-[var(--theme-muted)]">Waiting for the first streamed response…</p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Worker Sessions</h2>
-                <span className="text-xs text-[var(--theme-muted-2)]">Polling /api/sessions every 3s</span>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {conductor.workers.map((worker) => {
                   const dot = getWorkerDot(worker.status)
-                  const isSelected = selectedWorkerKey === worker.key
                   return (
-                    <button
+                    <div
                       key={worker.key}
-                      type="button"
-                      onClick={() => setSelectedWorkerKey(worker.key)}
                       className={cn(
-                        'rounded-2xl border bg-[var(--theme-card)] px-4 py-4 text-left transition-colors hover:border-[var(--theme-accent)]',
-                        isSelected ? 'border-[var(--theme-accent)] ring-1 ring-[var(--theme-accent)]/35' : 'border-[var(--theme-border)]',
+                        'rounded-2xl border border-[var(--theme-border)] border-l-4 bg-[var(--theme-card)] px-4 py-3',
+                        getWorkerBorderClass(worker.status),
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -486,10 +471,10 @@ export function Conductor() {
                         </span>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
                           <p className="text-[var(--theme-muted)]">Model</p>
-                          <p className="mt-1 truncate text-[var(--theme-text)]">{worker.model ?? 'Unknown'}</p>
+                          <p className="mt-1 truncate text-[var(--theme-text)]">{getShortModelName(worker.model)}</p>
                         </div>
                         <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
                           <p className="text-[var(--theme-muted)]">Tokens</p>
@@ -504,78 +489,154 @@ export function Conductor() {
                           <p className="mt-1 text-[var(--theme-text)]">{formatRelativeTime(worker.updatedAt, now)}</p>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
-                {conductor.workers.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-8 text-center text-sm text-[var(--theme-muted)] md:col-span-2">
-                    Waiting for sub-agents to appear… if Aurora is still planning, this is normal.
-                  </div>
-                )}
               </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-full flex-col overflow-hidden bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
+      <div className="border-b border-[var(--theme-border)] bg-[var(--theme-card)]/70">
+        <div className="mx-auto w-full max-w-[960px] px-5 py-4 sm:px-6">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+            <div className="min-w-0 text-center">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted-2)]">
+                <span>Conductor</span>
+                <span>•</span>
+                <span>Elapsed {formatElapsedTime(conductor.missionStartedAt, now)}</span>
+                <span>•</span>
+                <span>{completedWorkers}/{Math.max(totalWorkers, 1)} complete</span>
+                <span>•</span>
+                <span>{activeWorkerCount} active</span>
+              </div>
+              <h1 className="mt-2 truncate text-2xl font-semibold tracking-tight text-[var(--theme-text)] sm:text-3xl">{conductor.goal}</h1>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={conductor.resetMission}
+                className="rounded-xl border-[var(--theme-border)] bg-[var(--theme-card)] text-[var(--theme-text)] hover:border-[var(--theme-accent)] hover:bg-[var(--theme-card2)]"
+              >
+                Leave Mission
+              </Button>
             </div>
           </div>
-        </section>
+          <div className="mt-4 h-0.5 w-full overflow-hidden rounded-full bg-[var(--theme-border)]">
+            <div className="h-full rounded-full bg-[var(--theme-accent)] transition-[width] duration-300" style={{ width: `${missionProgress}%` }} />
+          </div>
+        </div>
+      </div>
 
-        <aside className="border-t border-[var(--theme-border)] bg-[var(--theme-card)] px-5 py-6 lg:border-l lg:border-t-0">
-          {selectedWorker ? (
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Worker Output</p>
-                  <p className="mt-2 truncate text-lg font-semibold text-[var(--theme-text)]">{selectedWorker.label}</p>
-                  <p className="mt-1 text-xs text-[var(--theme-muted-2)]">{selectedWorker.displayName}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedWorkerKey(null)}
-                  className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
-                  aria-label="Close worker output"
-                >
-                  <HugeiconsIcon icon={Cancel01Icon} size={16} strokeWidth={1.8} />
-                </button>
-              </div>
-
-              <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)] p-4">
-                <p className="text-xs text-[var(--theme-muted)]">Status</p>
-                <p className="mt-1 text-xl font-semibold text-[var(--theme-text)]">{getWorkerDot(selectedWorker.status).label}</p>
-              </div>
-
-              <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-4">
-                {workerHistoryQuery.isLoading ? (
-                  <p className="text-sm text-[var(--theme-muted)]">Loading worker output…</p>
-                ) : workerHistoryQuery.error ? (
-                  <p className="text-sm text-red-300">{workerHistoryQuery.error instanceof Error ? workerHistoryQuery.error.message : 'Failed to load worker output.'}</p>
-                ) : selectedWorkerOutput ? (
-                  <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{selectedWorkerOutput}</Markdown>
-                ) : (
-                  <p className="text-sm text-[var(--theme-muted)]">No assistant output yet.</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
+      <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div className="mx-auto flex w-full max-w-[960px] flex-col gap-6">
+          <details
+            className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6"
+            open={!shouldCollapseLivePlanByDefault}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 marker:hidden">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Progress</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--theme-text)]">{completedWorkers}/{totalWorkers}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Aurora Live Plan</p>
+                <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Streaming decomposition from the main gateway chat session.</p>
               </div>
-              <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)] p-4">
-                <p className="text-xs text-[var(--theme-muted)]">Phase</p>
-                <p className="mt-1 text-xl font-semibold capitalize text-[var(--theme-text)]">Running</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)] p-4">
-                <p className="text-xs text-[var(--theme-muted)]">Active Workers</p>
-                <p className="mt-1 text-xl font-semibold text-[var(--theme-text)]">{conductor.activeWorkers.length}</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-card2)] p-4">
-                <p className="text-xs text-[var(--theme-muted)]">Last Refresh</p>
-                <p className="mt-1 text-xl font-semibold text-[var(--theme-text)]">
-                  {conductor.isRefreshingWorkers ? 'Refreshing…' : formatRelativeTime(new Date(now).toISOString(), now)}
-                </p>
-              </div>
+              <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300">
+                Running
+              </span>
+            </summary>
+            <div className="mt-4 min-h-[220px] rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
+              {conductor.streamText ? (
+                <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{conductor.streamText}</Markdown>
+              ) : (
+                <p className="text-sm text-[var(--theme-muted)]">Waiting for the first streamed response…</p>
+              )}
             </div>
-          )}
-        </aside>
+          </details>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Worker Sessions</h2>
+              <span className="text-xs text-[var(--theme-muted-2)]">Polling /api/sessions every 3s</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {conductor.workers.map((worker) => {
+                const dot = getWorkerDot(worker.status)
+                const isSelected = selectedWorkerKey === worker.key
+                const workerOutput = isSelected ? selectedWorkerOutput : ''
+                return (
+                  <button
+                    key={worker.key}
+                    type="button"
+                    onClick={() => setSelectedWorkerKey((current) => (current === worker.key ? null : worker.key))}
+                    className={cn(
+                      'rounded-2xl border border-[var(--theme-border)] border-l-4 bg-[var(--theme-card)] px-4 py-3 text-left transition-colors hover:border-[var(--theme-accent)]',
+                      getWorkerBorderClass(worker.status),
+                      isSelected && 'ring-1 ring-[var(--theme-accent)]/35',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={cn('size-2.5 rounded-full', dot.dotClass)} />
+                          <p className="truncate text-sm font-medium text-[var(--theme-text)]">{worker.label}</p>
+                        </div>
+                        <p className="mt-1 text-xs text-[var(--theme-muted-2)]">{worker.displayName}</p>
+                      </div>
+                      <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--theme-muted)]">
+                        {dot.label}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+                        <p className="text-[var(--theme-muted)]">Model</p>
+                        <p className="mt-1 truncate text-[var(--theme-text)]">{getShortModelName(worker.model)}</p>
+                      </div>
+                      <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+                        <p className="text-[var(--theme-muted)]">Tokens</p>
+                        <p className="mt-1 text-[var(--theme-text)]">{worker.tokenUsageLabel}</p>
+                      </div>
+                      <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+                        <p className="text-[var(--theme-muted)]">Elapsed</p>
+                        <p className="mt-1 text-[var(--theme-text)]">{formatElapsedTime(conductor.missionStartedAt, now)}</p>
+                      </div>
+                      <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+                        <p className="text-[var(--theme-muted)]">Last update</p>
+                        <p className="mt-1 text-[var(--theme-text)]">{formatRelativeTime(worker.updatedAt, now)}</p>
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <div className="mt-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-4">
+                        {workerHistoryQuery.isLoading ? (
+                          <p className="text-sm text-[var(--theme-muted)]">Loading worker output…</p>
+                        ) : workerHistoryQuery.error ? (
+                          <p className="text-sm text-red-300">
+                            {workerHistoryQuery.error instanceof Error ? workerHistoryQuery.error.message : 'Failed to load worker output.'}
+                          </p>
+                        ) : workerOutput ? (
+                          <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{workerOutput}</Markdown>
+                        ) : (
+                          <p className="text-sm text-[var(--theme-muted)]">No assistant output yet.</p>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+              {conductor.workers.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-8 text-center text-sm text-[var(--theme-muted)] md:col-span-2">
+                  Waiting for sub-agents to appear… if Aurora is still planning, this is normal.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   )
