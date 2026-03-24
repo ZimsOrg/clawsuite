@@ -216,11 +216,15 @@ function loadMissionHistory(): MissionHistoryEntry[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
     return parsed
       .filter((entry: unknown): entry is MissionHistoryEntry => {
         if (!entry || typeof entry !== 'object') return false
         const e = entry as Record<string, unknown>
-        return typeof e.id === 'string' && typeof e.goal === 'string' && typeof e.startedAt === 'string'
+        if (typeof e.id !== 'string' || typeof e.goal !== 'string' || typeof e.startedAt !== 'string') return false
+        if (seen.has(e.id)) return false
+        seen.add(e.id)
+        return true
       })
       .slice(0, MAX_HISTORY_ENTRIES)
   } catch {
@@ -231,7 +235,9 @@ function loadMissionHistory(): MissionHistoryEntry[] {
 function appendMissionHistory(entry: MissionHistoryEntry): void {
   try {
     const current = loadMissionHistory()
-    const updated = [entry, ...current].slice(0, MAX_HISTORY_ENTRIES)
+    // Deduplicate by id before appending
+    const filtered = current.filter((e) => e.id !== entry.id)
+    const updated = [entry, ...filtered].slice(0, MAX_HISTORY_ENTRIES)
     globalThis.localStorage?.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated))
   } catch {
     // Ignore persistence failures.
@@ -372,6 +378,7 @@ export function useConductorGateway() {
   const [missionHistory, setMissionHistory] = useState<MissionHistoryEntry[]>(() => loadMissionHistory())
   const doneRef = useRef(initialMission?.phase === 'complete')
   const seenToolCallRef = useRef(false)
+  const historySavedRef = useRef(false)
 
   const sessionsQuery = useQuery({
     queryKey: ['conductor', 'gateway', 'sessions'],
@@ -603,22 +610,25 @@ export function useConductorGateway() {
     })
   }, [workers, workerOutputs, tasks.length])
 
-  useEffect(() => {
+    useEffect(() => {
     if (phase !== 'complete' || !goal || !completedAt || !missionStartedAt) return
+    if (historySavedRef.current) return
+    historySavedRef.current = true
+
     const missionId = `mission-${new Date(missionStartedAt).getTime()}`
+    const entry: MissionHistoryEntry = {
+      id: missionId,
+      goal,
+      startedAt: missionStartedAt,
+      completedAt,
+      workerCount: workers.length,
+      totalTokens: workers.reduce((sum, worker) => sum + worker.totalTokens, 0),
+      status: streamError ? 'failed' : 'completed',
+      projectPath: null,
+    }
+    appendMissionHistory(entry)
     setMissionHistory((current) => {
-      if (current.some((entry) => entry.id === missionId)) return current
-      const entry: MissionHistoryEntry = {
-        id: missionId,
-        goal,
-        startedAt: missionStartedAt,
-        completedAt,
-        workerCount: workers.length,
-        totalTokens: workers.reduce((sum, worker) => sum + worker.totalTokens, 0),
-        status: streamError ? 'failed' : 'completed',
-        projectPath: null,
-      }
-      appendMissionHistory(entry)
+      if (current.some((e) => e.id === missionId)) return current
       return [entry, ...current].slice(0, MAX_HISTORY_ENTRIES)
     })
   }, [phase, goal, completedAt, missionStartedAt, workers, streamError])
@@ -662,6 +672,7 @@ export function useConductorGateway() {
       setWorkerOutputs({})
       setTasks([])
       seenToolCallRef.current = false
+      historySavedRef.current = false
       setMissionStartedAt(new Date().toISOString())
       setPhase('decomposing')
 
@@ -722,6 +733,7 @@ export function useConductorGateway() {
     setWorkerOutputs({})
     setTasks([])
     seenToolCallRef.current = false
+      historySavedRef.current = false
   }
 
   const retryMission = async () => {
