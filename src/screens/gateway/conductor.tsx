@@ -194,8 +194,7 @@ export function Conductor() {
   const conductor = useConductorGateway()
   const [goalDraft, setGoalDraft] = useState('')
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
-  const [activitySource, setActivitySource] = useState<'conductor' | 'all'>('conductor')
-  const [activityFilter, setActivityFilter] = useState<'all' | 'running' | 'completed' | 'failed'>('all')
+  const [activityFilter, setActivityFilter] = useState<'all' | 'conductor' | 'completed' | 'failed'>('all')
   const [activityPage, setActivityPage] = useState(0)
   const [now, setNow] = useState(() => Date.now())
 
@@ -255,15 +254,12 @@ export function Conductor() {
     return lines.join('\n')
   }, [phase, completePhaseProjectPath, totalWorkers, conductor.goal, totalTokens, conductor.missionStartedAt, now])
 
-  const sourceSessions =
-    activitySource === 'conductor'
-      ? conductor.recentSessions.filter((session) => (session.label as string)?.startsWith('worker-'))
-      : conductor.recentSessions
-
-  const filteredSessions =
-    activityFilter === 'all'
-      ? sourceSessions
-      : sourceSessions.filter((session) => deriveSessionStatus(session as GatewaySession) === activityFilter)
+  const filteredSessions = (() => {
+    const sessions = conductor.recentSessions
+    if (activityFilter === 'all') return sessions
+    if (activityFilter === 'conductor') return sessions.filter((s) => (s.label as string)?.startsWith('worker-'))
+    return sessions.filter((s) => deriveSessionStatus(s as GatewaySession) === activityFilter)
+  })()
   const totalPages = Math.max(1, Math.ceil(filteredSessions.length / ACTIVITY_PAGE_SIZE))
   const safeActivityPage = Math.min(activityPage, totalPages - 1)
   const pageSessions = filteredSessions.slice(
@@ -371,29 +367,8 @@ export function Conductor() {
                     </button>
                   </div>
                 </div>
-                <div className="mb-2 flex items-center gap-1 border-b border-[var(--theme-border)] pb-2">
-                  {(['conductor', 'all'] as const).map((source) => (
-                    <button
-                      key={source}
-                      type="button"
-                      onClick={() => {
-                        setActivitySource(source)
-                        setActivityFilter('all')
-                        setActivityPage(0)
-                      }}
-                      className={cn(
-                        'rounded-full border px-3 py-1 text-[11px] font-medium transition-colors',
-                        activitySource === source
-                          ? 'border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] text-[var(--theme-accent-strong)]'
-                          : 'border-[var(--theme-border)] text-[var(--theme-muted-2)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-text)]',
-                      )}
-                    >
-                      {source === 'conductor' ? 'Conductor' : 'All Agents'}
-                    </button>
-                  ))}
-                </div>
                 <div className="flex items-center gap-1">
-                  {(['all', 'running', 'completed', 'failed'] as const).map((filter) => (
+                  {(['all', 'conductor', 'completed', 'failed'] as const).map((filter) => (
                     <button
                       key={filter}
                       type="button"
@@ -417,10 +392,7 @@ export function Conductor() {
                     {pageSessions.map((session) => {
                       const recentSession = session as GatewaySession
                       const label = recentSession.label ?? recentSession.key ?? ''
-                      const displayName =
-                        activitySource === 'conductor'
-                          ? label.replace(/^worker-/, '').replace(/[-_]+/g, ' ')
-                          : label.replace(/[-_]+/g, ' ')
+                      const displayName = label.replace(/^worker-/, '').replace(/[-_]+/g, ' ')
                       const tokens = typeof recentSession.totalTokens === 'number' ? recentSession.totalTokens : 0
                       const model = getShortModelName(recentSession.model)
                       const updatedAt =
@@ -456,7 +428,7 @@ export function Conductor() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-[var(--theme-border)] px-4 py-6 text-center text-sm text-[var(--theme-muted)]">
-                    No {activitySource === 'conductor' ? 'conductor' : 'agent'} {activityFilter === 'all' ? '' : activityFilter} sessions
+                    No {activityFilter === 'all' ? '' : activityFilter} sessions found
                   </div>
                 )}
               </section>
