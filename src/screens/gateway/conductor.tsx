@@ -256,16 +256,21 @@ export function Conductor() {
   }, [conductor.streamText, conductor.workerOutputs, conductor.workers, selectedWorkerOutput])
 
   const completeSummary = useMemo(() => {
-    if (!completePhaseProjectPath || completedWorkers !== totalWorkers || totalWorkers === 0) return null
-    return [
+    if (phase !== 'complete') return null
+    const lines = [
       '✅ Mission completed successfully',
       '',
       `**Goal:** ${conductor.goal}`,
-      `**Workers:** ${totalWorkers} ran · ${totalTokens.toLocaleString()} tokens`,
       `**Duration:** ${formatElapsedTime(conductor.missionStartedAt, now)}`,
-      `**Output:** ${completePhaseProjectPath}/index.html`,
-    ].join('\n')
-  }, [completePhaseProjectPath, completedWorkers, totalWorkers, conductor.goal, totalTokens, conductor.missionStartedAt, now])
+    ]
+    if (totalWorkers > 0) {
+      lines.push(`**Workers:** ${totalWorkers} ran · ${totalTokens.toLocaleString()} tokens`)
+    }
+    if (completePhaseProjectPath) {
+      lines.push(`**Output:** ${completePhaseProjectPath}/index.html`)
+    }
+    return lines.join('\n')
+  }, [phase, completePhaseProjectPath, totalWorkers, conductor.goal, totalTokens, conductor.missionStartedAt, now])
 
   if (phase === 'home') {
     return (
@@ -363,7 +368,10 @@ export function Conductor() {
                     {conductor.streamText}
                   </Markdown>
                 ) : (
-                  <p className="text-sm text-[var(--theme-muted)]">Waiting for Aurora to respond…</p>
+                  <div className="flex flex-col items-center justify-center gap-3 py-8">
+                    <div className="size-6 animate-spin rounded-full border-2 border-[var(--theme-accent)] border-t-transparent" />
+                    <p className="text-sm text-[var(--theme-muted)]">Aurora is planning the mission…</p>
+                  </div>
                 )}
               </div>
               {conductor.streamError && (
@@ -556,7 +564,10 @@ export function Conductor() {
               {livePlanText ? (
                 <Markdown className="max-w-none text-sm text-[var(--theme-text)]">{livePlanText}</Markdown>
               ) : (
-                <p className="text-sm text-[var(--theme-muted)]">Waiting for the first streamed response…</p>
+                <div className="flex items-center gap-3 py-4">
+                  <div className="size-4 animate-spin rounded-full border-2 border-[var(--theme-accent)] border-t-transparent" />
+                  <p className="text-sm text-[var(--theme-muted)]">Aurora is orchestrating the mission…</p>
+                </div>
               )}
             </div>
           </details>
@@ -637,7 +648,10 @@ export function Conductor() {
               })}
               {conductor.workers.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-8 text-center text-sm text-[var(--theme-muted)] md:col-span-2">
-                  Waiting for sub-agents to appear… if Aurora is still planning, this is normal.
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="size-4 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+                    <span>Spawning workers…</span>
+                  </div>
                 </div>
               )}
             </div>
