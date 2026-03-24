@@ -176,10 +176,26 @@ function getFilteredPlanText(planText: string, workerCount: number): string {
   return `Mission dispatched. ${workerCount} worker${workerCount === 1 ? '' : 's'} spawned.`
 }
 
+function deriveSessionStatus(session: GatewaySession): 'running' | 'completed' | 'failed' {
+  const updatedMs = new Date(session.updatedAt as string).getTime()
+  const staleness = Number.isFinite(updatedMs) ? Date.now() - updatedMs : 0
+  const tokens = typeof session.totalTokens === 'number' ? session.totalTokens : 0
+  const statusText = `${session.status ?? ''} ${session.state ?? ''}`.toLowerCase()
+
+  if (statusText.includes('error') || statusText.includes('failed')) return 'failed'
+  if (tokens > 0 && staleness > 30_000) return 'completed'
+  if (staleness > 120_000 && tokens === 0) return 'failed'
+  return 'running'
+}
+
+const ACTIVITY_PAGE_SIZE = 5
+
 export function Conductor() {
   const conductor = useConductorGateway()
   const [goalDraft, setGoalDraft] = useState('')
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
+  const [activityFilter, setActivityFilter] = useState<'all' | 'running' | 'completed' | 'failed'>('all')
+  const [activityPage, setActivityPage] = useState(0)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -237,6 +253,25 @@ export function Conductor() {
     }
     return lines.join('\n')
   }, [phase, completePhaseProjectPath, totalWorkers, conductor.goal, totalTokens, conductor.missionStartedAt, now])
+
+  const filteredSessions =
+    activityFilter === 'all'
+      ? conductor.recentSessions
+      : conductor.recentSessions.filter((session) => deriveSessionStatus(session as GatewaySession) === activityFilter)
+  const totalPages = Math.max(1, Math.ceil(filteredSessions.length / ACTIVITY_PAGE_SIZE))
+  const safeActivityPage = Math.min(activityPage, totalPages - 1)
+  const pageSessions = filteredSessions.slice(
+    safeActivityPage * ACTIVITY_PAGE_SIZE,
+    (safeActivityPage + 1) * ACTIVITY_PAGE_SIZE,
+  )
+  const canPrev = safeActivityPage > 0
+  const canNext = safeActivityPage < totalPages - 1
+
+  useEffect(() => {
+    if (activityPage !== safeActivityPage) {
+      setActivityPage(safeActivityPage)
+    }
+  }, [activityPage, safeActivityPage])
 
   if (phase === 'home') {
     return (
@@ -302,39 +337,98 @@ export function Conductor() {
 
             {conductor.recentSessions.length > 0 && (
               <section className="w-full space-y-3">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">
-                  Recent Activity
-                </h2>
-                <div className="space-y-1.5">
-                  {conductor.recentSessions.map((session) => {
-                    const recentSession = session as GatewaySession
-                    const label = recentSession.label ?? recentSession.key ?? ''
-                    const displayName = label.replace(/^worker-/, '').replace(/[-_]+/g, ' ')
-                    const tokens = typeof recentSession.totalTokens === 'number' ? recentSession.totalTokens : 0
-                    const model = getShortModelName(recentSession.model)
-                    const updatedAt =
-                      typeof recentSession.updatedAt === 'string'
-                        ? recentSession.updatedAt
-                        : typeof recentSession.startedAt === 'string'
-                          ? recentSession.startedAt
-                          : typeof recentSession.createdAt === 'string'
-                            ? recentSession.createdAt
-                            : null
-
-                    return (
-                      <div
-                        key={recentSession.key}
-                        className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2.5 text-sm"
-                      >
-                        <span className="size-2 rounded-full bg-emerald-400" />
-                        <span className="min-w-0 flex-1 truncate font-medium text-[var(--theme-text)] capitalize">{displayName}</span>
-                        <span className="text-xs text-[var(--theme-muted)]">{model}</span>
-                        <span className="text-xs text-[var(--theme-muted)]">{tokens.toLocaleString()} tok</span>
-                        <span className="text-xs text-[var(--theme-muted-2)]">{formatRelativeTime(updatedAt, Date.now())}</span>
-                      </div>
-                    )
-                  })}
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">Recent Activity</h2>
+                  <div className="ml-auto flex items-center gap-1">
+                    <span className="text-[10px] text-[var(--theme-muted-2)]">{safeActivityPage + 1}/{totalPages}</span>
+                    <button
+                      type="button"
+                      disabled={!canPrev}
+                      onClick={() => setActivityPage((page) => page - 1)}
+                      className={cn(
+                        'flex size-7 items-center justify-center rounded-lg border border-[var(--theme-border)] text-[var(--theme-muted)] transition-colors',
+                        canPrev ? 'hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]' : 'opacity-30',
+                      )}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canNext}
+                      onClick={() => setActivityPage((page) => page + 1)}
+                      className={cn(
+                        'flex size-7 items-center justify-center rounded-lg border border-[var(--theme-border)] text-[var(--theme-muted)] transition-colors',
+                        canNext ? 'hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]' : 'opacity-30',
+                      )}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
+                <div className="flex items-center gap-1">
+                  {(['all', 'running', 'completed', 'failed'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => {
+                        setActivityFilter(filter)
+                        setActivityPage(0)
+                      }}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-[11px] font-medium capitalize transition-colors',
+                        activityFilter === filter
+                          ? 'border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] text-[var(--theme-accent-strong)]'
+                          : 'border-[var(--theme-border)] text-[var(--theme-muted-2)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-text)]',
+                      )}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+                {pageSessions.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {pageSessions.map((session) => {
+                      const recentSession = session as GatewaySession
+                      const label = recentSession.label ?? recentSession.key ?? ''
+                      const displayName = label.replace(/^worker-/, '').replace(/[-_]+/g, ' ')
+                      const tokens = typeof recentSession.totalTokens === 'number' ? recentSession.totalTokens : 0
+                      const model = getShortModelName(recentSession.model)
+                      const updatedAt =
+                        typeof recentSession.updatedAt === 'string'
+                          ? recentSession.updatedAt
+                          : typeof recentSession.startedAt === 'string'
+                            ? recentSession.startedAt
+                            : typeof recentSession.createdAt === 'string'
+                              ? recentSession.createdAt
+                              : null
+                      const sessionStatus = deriveSessionStatus(recentSession)
+                      const dotClass =
+                        sessionStatus === 'completed'
+                          ? 'bg-emerald-400'
+                          : sessionStatus === 'failed'
+                            ? 'bg-red-400'
+                            : 'bg-sky-400 animate-pulse'
+
+                      return (
+                        <div
+                          key={recentSession.key}
+                          className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2.5 text-sm"
+                        >
+                          <span className={cn('size-2 rounded-full', dotClass)} />
+                          <span className="min-w-0 flex-1 truncate font-medium text-[var(--theme-text)] capitalize">{displayName}</span>
+                          <span className="text-xs capitalize text-[var(--theme-muted)]">{sessionStatus}</span>
+                          <span className="text-xs text-[var(--theme-muted)]">{model}</span>
+                          <span className="text-xs text-[var(--theme-muted)]">{tokens.toLocaleString()} tok</span>
+                          <span className="text-xs text-[var(--theme-muted-2)]">{formatRelativeTime(updatedAt, now)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[var(--theme-border)] px-4 py-6 text-center text-sm text-[var(--theme-muted)]">
+                    No {activityFilter === 'all' ? '' : activityFilter} sessions
+                  </div>
+                )}
               </section>
             )}
           </div>
