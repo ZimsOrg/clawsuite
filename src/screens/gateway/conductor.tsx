@@ -714,6 +714,16 @@ export function Conductor() {
                 const dot = getWorkerDot(worker.status)
                 const persona = getAgentPersona(index)
                 const workerOutput = conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)
+                const workerStartedAt =
+                  typeof worker.raw.createdAt === 'string'
+                    ? worker.raw.createdAt
+                    : typeof worker.raw.startedAt === 'string'
+                      ? worker.raw.startedAt
+                      : conductor.missionStartedAt
+                const workerEndTime =
+                  worker.status === 'complete' || worker.status === 'stale'
+                    ? new Date(worker.updatedAt ?? new Date().toISOString()).getTime()
+                    : now
                 return (
                   <div
                     key={worker.key}
@@ -748,7 +758,7 @@ export function Conductor() {
                       </div>
                       <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
                         <p className="text-[var(--theme-muted)]">Elapsed</p>
-                        <p className="mt-1 text-[var(--theme-text)]">{formatElapsedTime(conductor.missionStartedAt, now)}</p>
+                        <p className="mt-1 text-[var(--theme-text)]">{formatElapsedTime(workerStartedAt, workerEndTime)}</p>
                       </div>
                       <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
                         <p className="text-[var(--theme-muted)]">Last update</p>
