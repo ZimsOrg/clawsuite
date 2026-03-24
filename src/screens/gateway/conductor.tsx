@@ -7,11 +7,13 @@ import {
   Search01Icon,
   TaskDone01Icon,
 } from '@hugeicons/core-free-icons'
+import { IsometricOffice } from '@/components/agent-swarm/isometric-office'
 import { Button } from '@/components/ui/button'
 import { Markdown } from '@/components/prompt-kit/markdown'
 import { type GatewaySession } from '@/lib/gateway-api'
+import { type SwarmSession } from '@/stores/agent-swarm-store'
 import { cn } from '@/lib/utils'
-import { type MissionHistoryEntry, useConductorGateway } from './hooks/use-conductor-gateway'
+import { type ConductorWorker, type MissionHistoryEntry, useConductorGateway } from './hooks/use-conductor-gateway'
 
 type ConductorPhase = 'home' | 'preview' | 'active' | 'complete'
 type QuickActionId = 'research' | 'build' | 'review' | 'deploy'
@@ -269,6 +271,17 @@ function getFilteredPlanText(planText: string, workerCount: number): string {
 
   if (filtered) return filtered
   return `Mission dispatched. ${workerCount} worker${workerCount === 1 ? '' : 's'} spawned.`
+}
+
+function workersToSwarmSessions(workers: ConductorWorker[]): SwarmSession[] {
+  return workers.map((worker) => ({
+    ...worker.raw,
+    swarmStatus: worker.status === 'complete' ? 'complete' as const
+      : worker.status === 'running' ? 'running' as const
+      : worker.status === 'stale' ? 'failed' as const
+      : 'idle' as const,
+    staleness: worker.updatedAt ? Date.now() - new Date(worker.updatedAt).getTime() : 0,
+  }))
 }
 
 function deriveSessionStatus(session: GatewaySession): 'running' | 'completed' | 'failed' {
@@ -862,35 +875,39 @@ export function Conductor() {
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
           </div>
-          <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-5 py-4 shadow-[0_24px_80px_var(--theme-shadow)] sm:px-6">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-              <div className="min-w-0 text-center">
-                <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted-2)]">
-                  <span>Conductor</span>
-                  <span>•</span>
-                  <span>Elapsed {formatElapsedTime(conductor.missionStartedAt, now)}</span>
-                  <span>•</span>
+          <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-5 py-5 shadow-[0_24px_80px_var(--theme-shadow)]">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="line-clamp-2 text-xl font-semibold tracking-tight text-[var(--theme-text)] sm:text-2xl">{conductor.goal}</h1>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--theme-muted)]">
+                  <span>{formatElapsedTime(conductor.missionStartedAt, now)}</span>
+                  <span className="text-[var(--theme-border)]">•</span>
                   <span>{completedWorkers}/{Math.max(totalWorkers, 1)} complete</span>
-                  <span>•</span>
+                  <span className="text-[var(--theme-border)]">•</span>
                   <span>{activeWorkerCount} active</span>
                 </div>
-                <h1 className="mt-2 line-clamp-2 text-2xl font-semibold tracking-tight text-[var(--theme-text)] sm:text-3xl">{conductor.goal}</h1>
               </div>
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={conductor.resetMission}
-                  className="rounded-xl border-[var(--theme-border)] bg-[var(--theme-card)] text-[var(--theme-text)] hover:border-[var(--theme-accent)] hover:bg-[var(--theme-card2)]"
-                >
-                  Leave Mission
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={conductor.resetMission}
+                className="shrink-0 rounded-xl border-[var(--theme-border)] bg-[var(--theme-card)] text-[var(--theme-text)] hover:border-[var(--theme-accent)] hover:bg-[var(--theme-card2)]"
+              >
+                Leave Mission
+              </Button>
             </div>
-            <div className="mt-4 h-0.5 w-full overflow-hidden rounded-full bg-[var(--theme-border)]">
+            <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-[var(--theme-border)]">
               <div className="h-full rounded-full bg-[var(--theme-accent)] transition-[width] duration-300" style={{ width: `${missionProgress}%` }} />
             </div>
           </section>
+          {conductor.workers.length > 0 && (
+            <div className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)]">
+              <IsometricOffice
+                sessions={workersToSwarmSessions(conductor.workers)}
+                className="h-[200px] w-full"
+              />
+            </div>
+          )}
           {livePlanText && (
             <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-5 py-4 shadow-[0_24px_80px_var(--theme-shadow)]">
               <div className="flex items-center justify-between gap-3">
