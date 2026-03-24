@@ -624,17 +624,17 @@ export function Conductor() {
                 )}
               </div>
               {conductor.streamError && (
-                <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
                   {conductor.streamError}
                 </div>
               )}
               {conductor.timeoutWarning && (
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-3">
-                  <p className="text-sm text-amber-200">⚠️ Planning is taking longer than expected...</p>
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-5 py-3">
+                  <p className="text-sm text-amber-700 dark:text-amber-300">⚠️ Planning is taking longer than expected...</p>
                   <Button
                     type="button"
                     onClick={conductor.resetMission}
-                    className="rounded-xl bg-amber-500/20 px-4 text-amber-200 hover:bg-amber-500/30"
+                    className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
                   >
                     Cancel
                   </Button>
@@ -669,26 +669,26 @@ export function Conductor() {
         <main className="mx-auto min-h-0 w-full max-w-[720px] flex-1 overflow-y-auto px-6 py-8">
           <div className="space-y-6">
             {conductor.streamError && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/40 bg-red-500/10 px-5 py-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-red-400">❌</span>
+                  <span className="text-red-500">❌</span>
                   <div>
-                    <p className="text-sm font-medium text-red-300">Mission failed</p>
-                    <p className="text-xs text-red-400">{conductor.streamError}</p>
+                    <p className="text-sm font-medium text-red-600 dark:text-red-400">Mission failed</p>
+                    <p className="text-xs text-red-500 dark:text-red-400/80">{conductor.streamError}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
                     type="button"
                     onClick={() => void conductor.retryMission()}
-                    className="rounded-xl bg-red-500/20 px-4 text-red-200 hover:bg-red-500/30"
+                    className="rounded-xl border border-red-400/40 bg-red-500/10 px-4 text-red-600 hover:bg-red-500/20 dark:text-red-300"
                   >
                     Retry Mission
                   </Button>
                   <Button
                     type="button"
                     onClick={conductor.resetMission}
-                    className="rounded-xl bg-[var(--theme-card)] px-4 text-[var(--theme-muted)] hover:bg-[var(--theme-card2)]"
+                    className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
                   >
                     New Mission
                   </Button>
@@ -868,23 +868,23 @@ export function Conductor() {
             </div>
           </section>
           {conductor.timeoutWarning && (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-3">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-5 py-3">
               <div className="flex items-center gap-3">
-                <span className="text-amber-400">⚠️</span>
-                <p className="text-sm text-amber-200">No worker activity detected for 60 seconds. The mission may be stalled.</p>
+                <span className="text-amber-500">⚠️</span>
+                <p className="text-sm text-amber-700 dark:text-amber-300">No worker activity detected for 60 seconds. The mission may be stalled.</p>
               </div>
               <div className="flex gap-2">
                 <Button
                   type="button"
                   onClick={() => void conductor.retryMission()}
-                  className="rounded-xl bg-amber-500/20 px-4 text-amber-200 hover:bg-amber-500/30"
+                  className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
                 >
                   Retry
                 </Button>
                 <Button
                   type="button"
                   onClick={conductor.resetMission}
-                  className="rounded-xl bg-[var(--theme-card)] px-4 text-[var(--theme-muted)] hover:bg-[var(--theme-card2)]"
+                  className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
                 >
                   Cancel
                 </Button>

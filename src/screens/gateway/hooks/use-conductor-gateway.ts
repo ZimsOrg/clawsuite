@@ -783,9 +783,11 @@ export function useConductorGateway() {
         }
         if (event.type === 'error') {
           doneRef.current = true
-          setStreamError(event.message)
-          setPhase('complete')
-          setCompletedAt(new Date().toISOString())
+          if (missionWorkerKeys.size === 0) {
+            setStreamError(event.message)
+            setPhase('complete')
+            setCompletedAt(new Date().toISOString())
+          }
         }
         if (event.type === 'done') {
           doneRef.current = true
@@ -795,9 +797,11 @@ export function useConductorGateway() {
     },
     onError: (error) => {
       doneRef.current = true
-      setStreamError(error instanceof Error ? error.message : String(error))
-      setPhase('complete')
-      setCompletedAt(new Date().toISOString())
+      if (missionWorkerKeys.size === 0) {
+        setStreamError(error instanceof Error ? error.message : String(error))
+        setPhase('complete')
+        setCompletedAt(new Date().toISOString())
+      }
     },
   })
 
