@@ -18,37 +18,122 @@ const STATE_PATH = join(
   ".openclaw/workspace/data/dispatch-state.json"
 );
 
-function fireDispatchTrigger(missionId: string, mission: string, tasks: any[] = [], projectPath: string = "", daemonMissionId: string | null = null): void {
-  // Build task ID map so the agent knows which daemon IDs to PATCH
-  const taskIdList = tasks.map((t: any) => {
-    const dbId = t.dbId || t.id || "unknown";
+function resolveHooksToken(): string {
+  try {
+    const configPath = join(process.env.HOME || "", ".openclaw/openclaw.json");
+    if (!existsSync(configPath)) return "";
+    const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+    return typeof cfg?.hooks?.token === "string" ? cfg.hooks.token : "";
+  } catch {
+    return "";
+  }
+}
+
+function buildOrchestratorMessage(missionId: string, mission: string, tasks: any[], projectPath: string, daemonMissionId: string | null): string {
+  const taskLines = tasks.map((t: any, i: number) => {
+    const dbId = t.dbId || t.id || `task-${String(i + 1).padStart(3, "0")}`;
     const title = t.title || t.name || "Task";
-    return `${dbId}: ${title}`;
-  }).join(", ");
+    const desc = t.description || "";
+    const type = t.type || "coding";
+    return `- [DB_ID: ${dbId}] "${title}" (type: ${type})${desc ? `\n  ${desc}` : ""}`;
+  }).join("\n");
 
   const missionPatchId = daemonMissionId || missionId;
-  const text = [
-    `[dispatch] Mission started.`,
-    `Goal: "${mission.slice(0, 120)}"`,
-    `Daemon mission ID: ${missionPatchId}`,
-    `Project path: ${projectPath}`,
-    `Tasks (daemon DB IDs): ${taskIdList}`,
-    `Read the workspace-dispatch skill and execute the mission. PATCH task status to http://localhost:3099/api/workspace/tasks/<DB_ID> as you go.`,
-  ].join("\n");
 
-  // Simple wake event — reaches the main agent session, zero config needed
+  return `You are a mission orchestrator. Execute this mission end-to-end autonomously.
+
+## Mission
+Daemon Mission ID: ${missionPatchId}
+Goal: ${mission}
+Project Path: ${projectPath}
+
+## Tasks (use the DB_ID values in ALL daemon PATCH calls)
+${taskLines}
+
+## Execution — for EACH task in order:
+
+1. Mark task running:
+   curl -s -X PATCH http://localhost:3099/api/workspace/tasks/<DB_ID> -H 'Content-Type: application/json' -d '{"status":"running"}'
+
+2. Spawn a worker using sessions_spawn:
+   - task: clear build instructions (include project path + expected output file)
+   - model: "openai-codex/gpt-5.4"
+   - mode: "run"
+   - label: "worker-<short-name>"
+   - cwd: "${projectPath}"
+   - runTimeoutSeconds: 300
+
+3. Call sessions_yield and WAIT for the worker to finish.
+
+4. Verify output exists (use exec to check files).
+
+5. Mark task completed:
+   curl -s -X PATCH http://localhost:3099/api/workspace/tasks/<DB_ID> -H 'Content-Type: application/json' -d '{"status":"completed"}'
+
+6. Continue to next task.
+
+## After ALL tasks:
+curl -s -X PATCH http://localhost:3099/api/workspace/missions/${missionPatchId}/status -H 'Content-Type: application/json' -d '{"status":"completed"}'
+
+## Rules
+- Execute autonomously. Do NOT ask for user input.
+- Use the EXACT DB_ID values from the task list above.
+- If a worker fails, retry ONCE then mark task failed.
+- Do NOT start servers or long-running processes.
+- Work ONLY in ${projectPath}.`;
+}
+
+function fireDispatchTrigger(missionId: string, mission: string, tasks: any[] = [], projectPath: string = "", daemonMissionId: string | null = null): void {
+  const message = buildOrchestratorMessage(missionId, mission, tasks, projectPath, daemonMissionId);
   const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL ?? "http://127.0.0.1:18789";
+  const hooksToken = process.env.OPENCLAW_HOOKS_TOKEN ?? resolveHooksToken();
+
+  // Primary: hooks/agent — spawns isolated orchestrator session (no chat dependency)
+  if (hooksToken) {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${hooksToken}`,
+    };
+
+    fetch(`${gatewayUrl}/hooks/agent`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        message,
+        name: `orchestrator-${missionId}`,
+        deliver: false,
+        wakeMode: "now",
+        timeoutSeconds: 600,
+      }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          return res.json().then((data: any) => {
+            console.log("[dispatch] Orchestrator spawned for", missionId, "runId:", data?.runId);
+          });
+        }
+        throw new Error(`Hooks returned ${res.status}`);
+      })
+      .catch((err: Error) => {
+        console.error("[dispatch] Hooks failed, falling back to wake:", err.message);
+        fireWakeFallback(gatewayUrl, missionId, mission);
+      });
+  } else {
+    // No hooks token — fall back to wake
+    fireWakeFallback(gatewayUrl, missionId, mission);
+  }
+}
+
+function fireWakeFallback(gatewayUrl: string, missionId: string, mission: string): void {
+  const text = `[dispatch] Mission started: ${missionId}. Goal: "${mission.slice(0, 100)}". Read data/dispatch-state.json and run the workspace-dispatch skill loop.`;
   fetch(`${gatewayUrl}/api/cron/wake`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, mode: "now" }),
   })
     .then((res) => {
-      if (res.ok) {
-        console.log("[dispatch] Wake sent for", missionId);
-      } else {
-        console.error("[dispatch] Wake returned", res.status);
-      }
+      if (res.ok) console.log("[dispatch] Wake sent for", missionId);
+      else console.error("[dispatch] Wake returned", res.status);
     })
     .catch((err: Error) => {
       console.error("[dispatch] Wake failed:", err.message);
