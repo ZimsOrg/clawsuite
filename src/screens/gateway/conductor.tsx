@@ -539,12 +539,37 @@ export function Conductor() {
                   Working
                 </span>
               </div>
-              <div className="mt-4 flex min-h-[200px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
-                <PlanningIndicator />
+              <div className="mt-4 min-h-[200px] overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
+                {conductor.planText ? (
+                  <div className="space-y-4">
+                    <Markdown className="max-h-[500px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">
+                      {conductor.planText}
+                    </Markdown>
+                    <PlanningIndicator />
+                  </div>
+                ) : (
+                  <PlanningIndicator />
+                )}
               </div>
               {conductor.streamError && (
                 <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                   {conductor.streamError}
+                </div>
+              )}
+              {conductor.tasks.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">
+                    Identified Tasks ({conductor.tasks.length})
+                  </p>
+                  {conductor.tasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2 text-sm"
+                    >
+                      <span className="size-2 rounded-full bg-zinc-500" />
+                      <span className="text-[var(--theme-text)]">{task.title}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
