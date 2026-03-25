@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowRight01Icon,
@@ -287,6 +288,17 @@ export function Conductor() {
   const [activityPage, setActivityPage] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const modelsQuery = useQuery({
+    queryKey: ['conductor', 'models'],
+    queryFn: async () => {
+      const res = await fetch('/api/models')
+      const data = (await res.json()) as { ok?: boolean; models?: Array<{ id?: string; provider?: string; name?: string }> }
+      return data.models ?? []
+    },
+    enabled: settingsOpen,
+    staleTime: 60_000,
+  })
+  const availableModels = modelsQuery.data ?? []
 
   useEffect(() => {
     if (conductor.phase === 'idle' || conductor.phase === 'complete') return
@@ -758,24 +770,30 @@ export function Conductor() {
                 <div className="mt-6 space-y-4">
                   <label className="block space-y-2">
                     <span className="text-sm font-medium text-[var(--theme-text)]">Orchestrator Model</span>
-                    <input
-                      type="text"
+                    <select
                       value={conductor.conductorSettings.orchestratorModel}
                       onChange={(event) => updateSettings({ orchestratorModel: event.target.value })}
-                      placeholder="default (auto)"
-                      className="w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 text-sm text-[var(--theme-text)] outline-none transition-colors placeholder:text-[var(--theme-muted-2)] focus:border-[var(--theme-accent)]"
-                    />
+                      className="w-full appearance-none rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 text-sm text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
+                    >
+                      <option value="">Default (auto)</option>
+                      {availableModels.map((m) => (
+                        <option key={`orch-${m.id}`} value={m.id ?? ''}>{m.name ?? m.id}{m.provider ? ` (${m.provider})` : ''}</option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="block space-y-2">
                     <span className="text-sm font-medium text-[var(--theme-text)]">Worker Model</span>
-                    <input
-                      type="text"
+                    <select
                       value={conductor.conductorSettings.workerModel}
                       onChange={(event) => updateSettings({ workerModel: event.target.value })}
-                      placeholder="default (auto)"
-                      className="w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 text-sm text-[var(--theme-text)] outline-none transition-colors placeholder:text-[var(--theme-muted-2)] focus:border-[var(--theme-accent)]"
-                    />
+                      className="w-full appearance-none rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 text-sm text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
+                    >
+                      <option value="">Default (auto)</option>
+                      {availableModels.map((m) => (
+                        <option key={`worker-${m.id}`} value={m.id ?? ''}>{m.name ?? m.id}{m.provider ? ` (${m.provider})` : ''}</option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="block space-y-2">
