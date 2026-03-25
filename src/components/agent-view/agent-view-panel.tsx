@@ -897,8 +897,13 @@ export function AgentViewPanel() {
                   size="icon-sm"
                   variant="ghost"
                   onClick={function handleExpandHub() {
-                    setOpen(false)
                     navigate({ to: '/conductor' })
+                    setTimeout(() => {
+                      if (window.location.pathname !== '/conductor') {
+                        window.location.assign('/conductor')
+                      }
+                    }, 50)
+                    setOpen(false)
                   }}
                   aria-label="Open Conductor"
                   title="Open Conductor"
