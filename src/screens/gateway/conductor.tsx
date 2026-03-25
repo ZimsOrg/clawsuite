@@ -1363,29 +1363,35 @@ export function Conductor() {
       <div className="flex min-h-dvh flex-col overflow-y-auto bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
         <main className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col items-stretch justify-center px-4 py-4 pb-[calc(var(--tabbar-h,80px)+1rem)] md:px-6 md:py-6">
           <div className="w-full space-y-4">
-            <div className="relative flex items-center justify-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
-                Conductor
-                <span className="size-2 rounded-full bg-emerald-400" />
+            <div className="space-y-2 text-center">
+              <div className="relative flex items-center justify-center">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
+                  Conductor
+                  <span className="size-2 rounded-full bg-emerald-400" />
+                </div>
+                <div className="absolute right-0 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMissionModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--theme-accent)] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[var(--theme-accent-strong)]"
+                  >
+                    + New Mission
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen(true)}
+                    className="inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                    aria-label="Open conductor settings"
+                  >
+                    <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="absolute right-0 inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
-                aria-label="Open conductor settings"
-              >
-                <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
-              </button>
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--theme-text)] md:text-3xl">What should the team do next?</h1>
+              <p className="text-sm text-[var(--theme-muted-2)]">Describe the mission. The agent will decompose it, then workers appear here live.</p>
             </div>
 
-            <section className="relative overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]" style={{ height: 340 }}>
-              <button
-                type="button"
-                onClick={() => setMissionModalOpen(true)}
-                className="absolute right-4 top-4 z-10 rounded-xl bg-[var(--theme-accent)] px-4 py-2 text-xs font-semibold text-white shadow-md transition-colors hover:bg-[var(--theme-accent-strong)]"
-              >
-                + New Mission
-              </button>
+            <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]" style={{ height: 340 }}>
               <OfficeView
                 agentRows={homeOfficeRows}
                 missionRunning={homeOfficeRows.some((a) => a.status === 'active')}
@@ -1437,7 +1443,7 @@ export function Conductor() {
                               <span className="min-w-0 flex-1 truncate font-medium text-[var(--theme-text)]">{entry.goal}</span>
                               <span
                                 className={cn(
-                                  'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em]',
+                                  'w-[70px] shrink-0 rounded-full border px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-[0.12em]',
                                   entry.status === 'completed'
                                     ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-300'
                                     : 'border-red-400/35 bg-red-500/10 text-red-300',
@@ -1445,8 +1451,8 @@ export function Conductor() {
                               >
                                 {entry.status === 'completed' ? 'Complete' : 'Failed'}
                               </span>
-                              <span className="shrink-0 text-xs text-[var(--theme-muted-2)]">{formatRelativeTime(entry.completedAt, now)}</span>
-                              <span className="shrink-0 text-xs text-[var(--theme-muted)]">{entry.totalTokens.toLocaleString()} tok</span>
+                              <span className="w-[52px] shrink-0 text-right text-xs text-[var(--theme-muted-2)]">{formatRelativeTime(entry.completedAt, now)}</span>
+                              <span className="w-[72px] shrink-0 text-right text-xs text-[var(--theme-muted)]">{entry.totalTokens.toLocaleString()} tok</span>
                             </button>
                           )
                         })
