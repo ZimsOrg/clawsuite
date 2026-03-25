@@ -540,36 +540,49 @@ export function Conductor() {
     }, 150)
   }
 
+  // Queue of steer messages waiting for active workers
+  const [pendingSteers, setPendingSteers] = useState<string[]>([])
+
+  // Flush pending steers when workers become available
+  useEffect(() => {
+    if (pendingSteers.length === 0) return
+    const activeWorkers = conductor.workers.filter((w) => w.status === 'running')
+    if (activeWorkers.length === 0) return
+
+    const toSend = [...pendingSteers]
+    setPendingSteers([])
+
+    const targets = [...new Set(activeWorkers.map((w) => w.key))]
+    for (const msg of toSend) {
+      void Promise.allSettled(
+        targets.map((key) => conductor.sendSessionMessage(key, `[STEER] ${msg}`)),
+      )
+    }
+  }, [pendingSteers, conductor.workers])
+
   const handleSendSteer = async () => {
     const trimmed = steerDraft.trim()
     if (!trimmed) return
 
-    // Collect all possible targets — orchestrator + active workers
-    const targets: string[] = []
-    if (conductor.orchestratorSessionKey) targets.push(conductor.orchestratorSessionKey)
-    for (const worker of conductor.workers) {
-      if (worker.status === 'running') targets.push(worker.key)
-    }
-
-    if (targets.length === 0) {
-      setSteerError('No active sessions to steer — workers may not have spawned yet')
-      return
-    }
-
-    // Optimistically accept the steer message
+    // Optimistically accept
     setSteerDraft('')
     setSteerError(null)
     setSteerHistory((current) => [...current, trimmed])
     setSteerHistoryTimestamps((current) => [...current, Date.now()])
 
-    // Best-effort send to all targets — don't block on failures
-    const results = await Promise.allSettled(
-      [...new Set(targets)].map((sessionKey) => conductor.sendSessionMessage(sessionKey, `[STEER] ${trimmed}`)),
-    )
-    const successes = results.filter((r) => r.status === 'fulfilled').length
-    if (successes === 0) {
-      setSteerError('Could not reach any sessions — they may still be starting up. Try again in a moment.')
+    // Only target active WORKERS (not the orchestrator — it's likely already finished)
+    const activeWorkers = conductor.workers.filter((w) => w.status === 'running')
+
+    if (activeWorkers.length === 0) {
+      // Queue it — will auto-send when workers appear
+      setPendingSteers((current) => [...current, trimmed])
+      return
     }
+
+    const targets = [...new Set(activeWorkers.map((w) => w.key))]
+    void Promise.allSettled(
+      targets.map((key) => conductor.sendSessionMessage(key, `[STEER] ${trimmed}`)),
+    )
   }
 
   const updateSettings = (patch: Partial<typeof conductor.conductorSettings>) => {
@@ -1886,7 +1899,11 @@ export function Conductor() {
                     className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-1.5 text-xs text-[var(--theme-muted)]"
                   >
                     <span className="truncate text-[var(--theme-text)]">{message}</span>
-                    <span className="shrink-0 text-[var(--theme-muted-2)]">{formatSteerTimestamp(steerHistoryTimestamps[index] ?? Date.now())}</span>
+                    {pendingSteers.includes(message) ? (
+                      <span className="shrink-0 text-amber-500">queued</span>
+                    ) : (
+                      <span className="shrink-0 text-[var(--theme-muted-2)]">{formatSteerTimestamp(steerHistoryTimestamps[index] ?? Date.now())}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1923,8 +1940,8 @@ export function Conductor() {
               </button>
             </form>
 
-            {!conductor.orchestratorSessionKey && conductor.workers.length === 0 ? (
-              <p className="mt-3 text-xs text-[var(--theme-muted)]">Workers are still spawning — steer messages will be sent once sessions are available.</p>
+            {pendingSteers.length > 0 ? (
+              <p className="mt-3 text-xs text-amber-500">⏳ {pendingSteers.length} steer message{pendingSteers.length > 1 ? 's' : ''} queued — will send when workers spawn.</p>
             ) : null}
 
             {steerError ? (
