@@ -75,7 +75,7 @@ function buildOrchestratorPrompt(
     ...(options.workerModel ? ['', `Use model: ${options.workerModel} for all workers`] : []),
     ...(options.maxParallel > 1
       ? ['', `Run up to ${options.maxParallel} workers in parallel when tasks are independent`]
-      : ['', 'Run tasks sequentially — only ONE worker at a time. Wait for each worker to finish before spawning the next.']),
+      : ['', 'Spawn workers one at a time. Do NOT wait for workers to finish — the UI handles tracking.']),
     ...(options.supervised ? ['', 'Supervised mode is enabled. Require approval before each task.'] : []),
     '',
     '## Critical Rules',
@@ -86,7 +86,8 @@ function buildOrchestratorPrompt(
     '- Label workers as "worker-<task-slug>" so the UI can track them',
     '- Each worker gets a self-contained prompt with the task + exit criteria',
     `- Workers should write output to ${outputPrefix} directories`,
-    '- Verify exit criteria after each worker completes',
+    '- Do NOT use sessions_yield — it will hang in this session type. Instead, spawn workers and let them run independently.',
+    '- After spawning all workers, report your plan summary and finish. The UI tracks worker completion automatically.',
     '- Report a summary when all tasks are done',
   ].join('\n')
 }
