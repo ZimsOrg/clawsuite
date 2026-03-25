@@ -1361,37 +1361,39 @@ export function Conductor() {
 
     return (
       <div className="flex min-h-dvh flex-col overflow-y-auto bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
-        <main className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col items-stretch px-4 py-4 pb-[calc(var(--tabbar-h,80px)+1rem)] md:px-6 md:py-6">
+        <main className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col items-stretch justify-center px-4 py-4 pb-[calc(var(--tabbar-h,80px)+1rem)] md:px-6 md:py-6">
           <div className="w-full space-y-4">
-            <div className="space-y-2">
-              <div className="relative flex items-center justify-center">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
-                  Conductor
-                  <span className="size-2 rounded-full bg-emerald-400" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSettingsOpen(true)}
-                  className="absolute right-0 inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
-                  aria-label="Open conductor settings"
-                >
-                  <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
-                </button>
+            <div className="relative flex items-center justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
+                Conductor
+                <span className="size-2 rounded-full bg-emerald-400" />
               </div>
-              <p className="text-center text-xs text-[var(--theme-muted-2)] md:text-sm">
-                Describe a mission for your agent team.
-              </p>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="absolute right-0 inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                aria-label="Open conductor settings"
+              >
+                <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
+              </button>
             </div>
 
-            <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]" style={{ height: 340 }}>
+            <section className="relative overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]" style={{ height: 340 }}>
+              <button
+                type="button"
+                onClick={() => setMissionModalOpen(true)}
+                className="absolute right-4 top-4 z-10 rounded-xl bg-[var(--theme-accent)] px-4 py-2 text-xs font-semibold text-white shadow-md transition-colors hover:bg-[var(--theme-accent-strong)]"
+              >
+                + New Mission
+              </button>
               <OfficeView
                 agentRows={homeOfficeRows}
                 missionRunning={homeOfficeRows.some((a) => a.status === 'active')}
                 onViewOutput={() => {}}
-                onNewMission={() => setMissionModalOpen(true)}
                 processType="parallel"
-                companyName="Agent Office"
+                companyName=""
                 containerHeight={340}
+                hideHeader
               />
             </section>
 
