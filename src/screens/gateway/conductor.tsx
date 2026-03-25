@@ -520,6 +520,16 @@ export function Conductor() {
                 </section>
               )}
 
+              {!selectedHistoryEntry.outputText && !selectedHistoryEntry.streamText && !selectedHistoryEntry.workerSummary?.length && !selectedHistoryEntry.outputPath && (
+                <section className="overflow-hidden rounded-3xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
+                  <p className="text-center text-sm text-[var(--theme-muted)]">
+                    No detailed output was captured for this mission.
+                    <br />
+                    <span className="text-xs text-[var(--theme-muted-2)]">Missions run after this update will save full agent summaries and output previews.</span>
+                  </p>
+                </section>
+              )}
+
               {selectedHistoryEntry.outputPath && (
                 <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
                   <div className="flex items-center justify-between gap-3">
