@@ -1025,27 +1025,25 @@ export function Conductor() {
       <div className="flex min-h-dvh flex-col overflow-y-auto bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
         <main className="mx-auto flex min-h-0 w-full max-w-[720px] flex-1 flex-col items-stretch justify-center px-4 py-4 pb-[calc(var(--tabbar-h,80px)+1rem)] md:px-6 md:py-8">
           <div className="w-full space-y-8">
-            <div className="space-y-3 text-center">
-              <div className="flex justify-center">
-                <div className="inline-flex items-center gap-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
-                    Conductor
-                    <span className="size-2 rounded-full bg-emerald-400" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen(true)}
-                    className="inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
-                    aria-label="Open conductor settings"
-                  >
-                    <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
-                  </button>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
+                  Conductor
+                  <span className="size-2 rounded-full bg-emerald-400" />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                  aria-label="Open conductor settings"
+                >
+                  <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
+                </button>
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight text-[var(--theme-text)] md:text-4xl">
+              <h1 className="text-center text-2xl font-semibold tracking-tight text-[var(--theme-text)] md:text-4xl">
                 What should the team do next?
               </h1>
-              <p className="text-sm text-[var(--theme-muted-2)]">
+              <p className="text-center text-sm text-[var(--theme-muted-2)]">
                 Describe the mission. The agent will decompose it in chat, then the worker sessions will appear here live.
               </p>
             </div>
