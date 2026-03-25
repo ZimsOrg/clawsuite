@@ -1076,7 +1076,7 @@ function ChatSidebarComponent({
                 navigateTo={suiteNav}
               />
               <CollapsibleSection
-                expanded={suiteExpanded || isCollapsed}
+                expanded={suiteExpanded}
                 items={suiteItems}
                 isCollapsed={isVisuallyCollapsed}
                 transition={transition}
@@ -1096,7 +1096,7 @@ function ChatSidebarComponent({
                 onToggle={toggleSystem}
               />
               <CollapsibleSection
-                expanded={systemExpanded || isAnySystemActive || isCollapsed}
+                expanded={systemExpanded || isAnySystemActive}
                 items={mobileSecondarySuite}
                 isCollapsed={isVisuallyCollapsed}
                 transition={transition}
@@ -1117,7 +1117,7 @@ function ChatSidebarComponent({
                 onToggle={toggleMission}
               />
               <CollapsibleSection
-                expanded={missionExpanded || isCollapsed}
+                expanded={missionExpanded}
                 items={missionItems}
                 isCollapsed={isVisuallyCollapsed}
                 transition={transition}
@@ -1136,7 +1136,7 @@ function ChatSidebarComponent({
             navigateTo={gatewayNav}
           />
           <CollapsibleSection
-            expanded={gatewayExpanded || isCollapsed}
+            expanded={gatewayExpanded}
             items={gatewayItems}
             isCollapsed={isVisuallyCollapsed}
             transition={transition}

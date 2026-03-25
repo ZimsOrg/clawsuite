@@ -114,10 +114,10 @@ const WARROOM_DESK_POSITIONS = [
 ]
 
 const GRID_SOCIAL_SPOTS: SocialSpot[] = [
-  { x: 880, y: 140, type: 'coffee' as const },
-  { x: 880, y: 300, type: 'water' as const },
+  { x: 840, y: 140, type: 'coffee' as const },
+  { x: 840, y: 300, type: 'water' as const },
   { x: 60, y: 440, type: 'plant' as const },
-  { x: 880, y: 460, type: 'snack' as const },
+  { x: 840, y: 460, type: 'snack' as const },
 ]
 
 const ROUNDTABLE_SOCIAL_SPOTS: SocialSpot[] = [
@@ -448,7 +448,7 @@ export function OfficeView({
     ? { x: 450, y: 108, text: 'Collaboration Ring' }
     : layoutTemplate === 'warroom'
       ? { x: 480, y: 112, text: 'Briefing Lounge' }
-      : { x: 880, y: 110, text: 'Break Area' }
+      : { x: 840, y: 110, text: 'Break Area' }
 
   const changeLayout = (nextTemplate: OfficeLayoutTemplate) => {
     setLayoutTemplate(nextTemplate)
