@@ -542,26 +542,33 @@ export function Conductor() {
 
   const handleSendSteer = async () => {
     const trimmed = steerDraft.trim()
-    if (!trimmed || !conductor.orchestratorSessionKey) return
+    if (!trimmed) return
 
-    try {
-      const activeWorkerSessionKeys = conductor.workers
-        .filter((worker) => worker.status === 'running')
-        .map((worker) => worker.key)
-      const sessionKeys = [...new Set([conductor.orchestratorSessionKey, ...activeWorkerSessionKeys])]
-      const results = await Promise.allSettled(
-        sessionKeys.map((sessionKey) => conductor.sendSessionMessage(sessionKey, `[STEER] ${trimmed}`)),
-      )
-      const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-      if (failures.length > 0) {
-        throw failures[0].reason instanceof Error ? failures[0].reason : new Error('Failed to send steer message')
-      }
-      setSteerDraft('')
-      setSteerError(null)
-      setSteerHistory((current) => [...current, trimmed])
-      setSteerHistoryTimestamps((current) => [...current, Date.now()])
-    } catch (error) {
-      setSteerError(error instanceof Error ? error.message : 'Failed to send steer message')
+    // Collect all possible targets — orchestrator + active workers
+    const targets: string[] = []
+    if (conductor.orchestratorSessionKey) targets.push(conductor.orchestratorSessionKey)
+    for (const worker of conductor.workers) {
+      if (worker.status === 'running') targets.push(worker.key)
+    }
+
+    if (targets.length === 0) {
+      setSteerError('No active sessions to steer — workers may not have spawned yet')
+      return
+    }
+
+    // Optimistically accept the steer message
+    setSteerDraft('')
+    setSteerError(null)
+    setSteerHistory((current) => [...current, trimmed])
+    setSteerHistoryTimestamps((current) => [...current, Date.now()])
+
+    // Best-effort send to all targets — don't block on failures
+    const results = await Promise.allSettled(
+      [...new Set(targets)].map((sessionKey) => conductor.sendSessionMessage(sessionKey, `[STEER] ${trimmed}`)),
+    )
+    const successes = results.filter((r) => r.status === 'fulfilled').length
+    if (successes === 0) {
+      setSteerError('Could not reach any sessions — they may still be starting up. Try again in a moment.')
     }
   }
 
@@ -1893,17 +1900,17 @@ export function Conductor() {
                 ref={steerInputRef}
                 type="text"
                 value={steerDraft}
-                onChange={(event) => setSteerDraft(event.target.value)}
+                onChange={(event) => { setSteerDraft(event.target.value); if (steerError) setSteerError(null) }}
                 placeholder="Send instructions to the agent..."
-                disabled={!conductor.orchestratorSessionKey || conductor.isSteering}
+                disabled={conductor.isSteering}
                 className="min-w-0 flex-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 text-sm text-[var(--theme-text)] outline-none transition-colors placeholder:text-[var(--theme-muted-2)] focus:border-[var(--theme-accent)] disabled:cursor-not-allowed disabled:opacity-60"
               />
               <button
                 type="submit"
-                disabled={!steerDraft.trim() || !conductor.orchestratorSessionKey || conductor.isSteering}
+                disabled={!steerDraft.trim() || conductor.isSteering}
                 className={cn(
                   'inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors sm:min-w-[96px]',
-                  !steerDraft.trim() || !conductor.orchestratorSessionKey || conductor.isSteering
+                  !steerDraft.trim() || conductor.isSteering
                     ? 'cursor-not-allowed border border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] opacity-60'
                     : 'border border-[var(--theme-border)] bg-[var(--theme-accent-soft)] text-[var(--theme-text)] hover:border-[var(--theme-accent)] hover:bg-[var(--theme-accent-soft-strong)]',
                 )}
@@ -1913,8 +1920,8 @@ export function Conductor() {
               </button>
             </form>
 
-            {!conductor.orchestratorSessionKey ? (
-              <p className="mt-3 text-xs text-[var(--theme-muted)]">Waiting for the orchestrator session before steer messages can be sent.</p>
+            {!conductor.orchestratorSessionKey && conductor.workers.length === 0 ? (
+              <p className="mt-3 text-xs text-[var(--theme-muted)]">Workers are still spawning — steer messages will be sent once sessions are available.</p>
             ) : null}
 
             {steerError ? (
