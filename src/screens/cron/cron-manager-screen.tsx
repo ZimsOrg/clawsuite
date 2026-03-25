@@ -173,10 +173,6 @@ export function CronManagerScreen() {
   }
 
   function handleStartCreate() {
-    if (formMode === 'create') {
-      closeForm()
-      return
-    }
     setFormMode('create')
     setEditingJobId(null)
     setFormError(null)
@@ -310,14 +306,14 @@ export function CronManagerScreen() {
               Refresh
             </Button>
             <Button
-              variant={formMode ? 'secondary' : 'outline'}
+              variant={formMode === 'create' ? 'secondary' : 'outline'}
               size="sm"
               onClick={function onClickCreate() {
                 handleStartCreate()
               }}
               className="tabular-nums"
             >
-              {formMode === 'create' ? 'Hide Create Form' : 'Create Job'}
+              Create Job
             </Button>
           </div>
         </header>
@@ -326,26 +322,6 @@ export function CronManagerScreen() {
           <section className="mb-4 rounded-2xl border border-accent-500/40 bg-accent-500/10 p-4 text-sm text-accent-500 text-pretty">
             {actionError}
           </section>
-        ) : null}
-
-        {formMode ? (
-          <div className="mb-4">
-            {formMode === 'edit' && !editingJob ? (
-              <section className="rounded-2xl border border-accent-500/40 bg-accent-500/10 p-4 text-sm text-accent-500 text-pretty">
-                The selected cron job is no longer available.
-              </section>
-            ) : (
-              <CronJobForm
-                key={`${formMode}-${editingJob?.id ?? 'create'}`}
-                mode={formMode}
-                initialJob={formMode === 'edit' ? editingJob : null}
-                pending={upsertMutation.isPending}
-                error={formError}
-                onSubmit={handleSubmitForm}
-                onClose={closeForm}
-              />
-            )}
-          </div>
         ) : null}
 
         {jobsQuery.isLoading ? (
@@ -383,6 +359,24 @@ export function CronManagerScreen() {
             deletePendingJobId={deletePendingJobId}
           />
         )}
+
+        {formMode ? (
+          formMode === 'edit' && !editingJob ? (
+            <section className="fixed inset-x-4 top-6 z-50 mx-auto max-w-xl rounded-2xl border border-accent-500/40 bg-accent-500/10 p-4 text-sm text-accent-500 shadow-lg backdrop-blur-xl">
+              The selected cron job is no longer available.
+            </section>
+          ) : (
+            <CronJobForm
+              key={`${formMode}-${editingJob?.id ?? 'create'}`}
+              mode={formMode}
+              initialJob={formMode === 'edit' ? editingJob : null}
+              pending={upsertMutation.isPending}
+              error={formError}
+              onSubmit={handleSubmitForm}
+              onClose={closeForm}
+            />
+          )
+        ) : null}
       </section>
     </motion.main>
   )
