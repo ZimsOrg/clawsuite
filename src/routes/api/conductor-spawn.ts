@@ -92,10 +92,8 @@ export const Route = createFileRoute('/api/conductor-spawn')({
           let result: SendResponse
           try {
             result = await gatewayRpc<SendResponse>('sessions.send', {
-              sessionKey,
+              key: sessionKey,
               message: prompt,
-              lane: 'subagent',
-              deliver: false,
               timeoutMs: 120_000,
               idempotencyKey,
             })
@@ -103,9 +101,8 @@ export const Route = createFileRoute('/api/conductor-spawn')({
             if (!looksLikeMethodMissingError(error)) throw error
             // Fallback for older gateways
             result = await gatewayRpc<SendResponse>('chat.send', {
-              sessionKey,
+              key: sessionKey,
               message: prompt,
-              deliver: false,
               timeoutMs: 120_000,
               idempotencyKey,
             })
