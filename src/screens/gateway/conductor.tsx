@@ -401,7 +401,7 @@ export function Conductor() {
     ? `/api/preview-file?path=${encodeURIComponent(`${completePhaseProjectPath}/index.html`)}`
     : null
 
-  const selectedHistoryOutputPath = selectedHistoryEntry?.outputPath ?? null
+  const selectedHistoryOutputPath = conductor.selectedHistoryEntry?.outputPath ?? null
   const selectedHistoryOutputLabel = useMemo(
     () => getOutputDisplayName(selectedHistoryOutputPath),
     [selectedHistoryOutputPath],
@@ -423,7 +423,7 @@ export function Conductor() {
         return false
       }
     },
-    enabled: !!selectedHistoryPreviewUrl && !!selectedHistoryEntry,
+    enabled: !!selectedHistoryPreviewUrl && !!conductor.selectedHistoryEntry,
     refetchInterval: (query) => (query.state.data === true ? false : 2_500),
     staleTime: 5_000,
   })
