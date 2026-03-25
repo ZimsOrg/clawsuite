@@ -1,15 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { gatewayRpc } from '../../server/gateway'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { requireJsonContentType } from '../../server/rate-limit'
-
-type SendResponse = {
-  runId?: string
-}
 
 let cachedSkill: string | null = null
 
@@ -58,12 +53,6 @@ function buildOrchestratorPrompt(goal: string, skill: string): string {
   ].join('\n')
 }
 
-function looksLikeMethodMissingError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const message = error.message.toLowerCase()
-  return message.includes('method') && (message.includes('not found') || message.includes('unknown'))
-}
-
 export const Route = createFileRoute('/api/conductor-spawn')({
   server: {
     handlers: {
@@ -85,32 +74,40 @@ export const Route = createFileRoute('/api/conductor-spawn')({
           const skill = loadDispatchSkill()
           const prompt = buildOrchestratorPrompt(goal, skill)
 
-          // Send to agent:main:main — always exists, trusted internal RPC
-          const sessionKey = 'agent:main:main'
-          const idempotencyKey = randomUUID()
+          // Use cron.add with an immediate "at" schedule to spawn a trusted isolated agentTurn
+          // This creates a proper session that can use sessions_spawn, exec, etc.
+          const now = new Date()
+          const jobName = `conductor-${Date.now()}`
 
-          let result: SendResponse
-          try {
-            result = await gatewayRpc<SendResponse>('sessions.send', {
-              key: sessionKey,
-              message: prompt,
-              timeoutMs: 120_000,
-              idempotencyKey,
-            })
-          } catch (error) {
-            if (!looksLikeMethodMissingError(error)) throw error
-            result = await gatewayRpc<SendResponse>('chat.send', {
-              key: sessionKey,
-              message: prompt,
-              timeoutMs: 120_000,
-              idempotencyKey,
-            })
+          const addResult = await gatewayRpc<{ ok: boolean; jobId?: string; error?: string }>('cron.add', {
+            job: {
+              name: jobName,
+              schedule: { kind: 'at', at: now.toISOString() },
+              payload: {
+                kind: 'agentTurn',
+                message: prompt,
+                timeoutSeconds: 600,
+              },
+              sessionTarget: 'isolated',
+              enabled: true,
+            },
+          })
+
+          if (!addResult.ok) {
+            return json({ ok: false, error: (addResult as { error?: string }).error ?? 'Failed to create cron job' }, { status: 500 })
           }
+
+          // Force-run it immediately
+          const jobId = addResult.jobId ?? jobName
+          await gatewayRpc('cron.run', { jobId, runMode: 'force' }).catch(() => {
+            // Job may already be running from the "at" schedule
+          })
 
           return json({
             ok: true,
-            sessionKey,
-            runId: result.runId ?? null,
+            sessionKey: `cron:${jobName}`,
+            jobId,
+            runId: null,
           })
         } catch (error) {
           return json(
