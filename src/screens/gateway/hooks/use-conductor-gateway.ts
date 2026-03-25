@@ -368,6 +368,14 @@ function clearPersistedMission(): void {
   }
 }
 
+function clearMissionHistoryStorage(): void {
+  try {
+    globalThis.localStorage?.removeItem(HISTORY_STORAGE_KEY)
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
 function readContextTokens(session: GatewaySession): number {
   return (
     readNumber(session.contextTokens) ??
@@ -457,8 +465,7 @@ function extractHistoryMessageText(message: HistoryMessage | undefined): string 
 
 function getLastAssistantMessage(messages: HistoryMessage[] | undefined): string {
   if (!Array.isArray(messages)) return ''
-  // Return the LONGEST assistant message — steer responses are typically short,
-  // while the actual work output (HTML, code, analysis) is the longest one.
+  // Return the longest assistant message so we prefer the substantive work output.
   let best = ''
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
@@ -712,6 +719,7 @@ export function useConductorGateway() {
     () => workers.filter((worker) => worker.status === 'running' || worker.status === 'idle'),
     [workers],
   )
+  const hasPersistedMission = initialMission !== null
 
   const getMissionElapsedMs = (referenceTime = Date.now()) => {
     if (!missionStartedAt) return 0
@@ -1103,33 +1111,11 @@ export function useConductorGateway() {
     clearMissionState()
   }
 
-  const sendSessionMessage = useMutation({
-    mutationFn: async ({ sessionKey, message }: { sessionKey: string; message: string }) => {
-      const trimmedSessionKey = sessionKey.trim()
-      const trimmedMessage = message.trim()
-
-      if (!trimmedSessionKey) throw new Error('Session key required')
-      if (!trimmedMessage) throw new Error('Message required')
-
-      const response = await fetch('/api/sessions/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionKey: trimmedSessionKey,
-          message: trimmedMessage,
-        }),
-      })
-
-      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string }
-      if (!response.ok) {
-        throw new Error(payload.error || `Send request failed (${response.status})`)
-      }
-
-      if (payload.ok !== true) {
-        throw new Error(payload.error || 'Failed to send message to session')
-      }
-    },
-  })
+  const resetSavedState = () => {
+    clearMissionState()
+    clearMissionHistoryStorage()
+    setMissionHistory([])
+  }
 
   const pauseAgent = useMutation({
     mutationFn: async ({ sessionKey, pause }: { sessionKey: string; pause: boolean }) => {
@@ -1204,18 +1190,14 @@ export function useConductorGateway() {
     missionStartedAt,
     isPaused,
     pausedElapsedMs,
-    pausedAtMs:
-      isPaused && pauseStartedAt
-        ? Number.isFinite(new Date(pauseStartedAt).getTime())
-          ? new Date(pauseStartedAt).getTime()
-          : null
-        : null,
+    pausedAtMs: pauseStartedAt ? new Date(pauseStartedAt).getTime() : null,
     missionElapsedMs: getMissionElapsedMs(),
     completedAt,
     tasks,
     workers,
     activeWorkers,
     missionHistory,
+    hasPersistedMission,
     selectedHistoryEntry,
     setSelectedHistoryEntry,
     recentSessions: recentSessionsQuery.data ?? [],
@@ -1224,12 +1206,11 @@ export function useConductorGateway() {
     conductorSettings,
     setConductorSettings,
     sendMission: (nextGoal: string) => sendMission.mutateAsync({ nextGoal, settings: conductorSettings }),
-    sendSessionMessage: (sessionKey: string, message: string) => sendSessionMessage.mutateAsync({ sessionKey, message }),
     pauseAgent: (sessionKey: string, pause: boolean) => pauseAgent.mutateAsync({ sessionKey, pause }),
     isSending: sendMission.isPending,
-    isSteering: sendSessionMessage.isPending,
     isPausing: pauseAgent.isPending,
     resetMission,
+    resetSavedState,
     stopMission,
     retryMission,
     refreshWorkers: sessionsQuery.refetch,

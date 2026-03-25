@@ -307,13 +307,6 @@ function formatRelativeTime(value: string | null | undefined, now: number): stri
   return `${diffHours}h ago`
 }
 
-function formatSteerTimestamp(value: number): string {
-  return new Date(value).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
 function truncateContinuationText(text: string, limit = 500): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
   if (normalized.length <= limit) return normalized
@@ -332,6 +325,86 @@ function getWorkerBorderClass(status: 'running' | 'complete' | 'stale' | 'idle')
   if (status === 'running') return 'border-l-sky-400'
   if (status === 'idle') return 'border-l-amber-400'
   return 'border-l-red-400'
+}
+
+function WorkerCard({
+  worker,
+  index,
+  conductor,
+  now,
+}: {
+  worker: ReturnType<typeof useConductorGateway>['workers'][number]
+  index: number
+  conductor: Pick<ReturnType<typeof useConductorGateway>, 'workerOutputs' | 'isPaused' | 'pausedAtMs' | 'missionStartedAt'>
+  now: number
+}) {
+  const dot = getWorkerDot(worker.status)
+  const persona = getAgentPersona(index)
+  const workerOutput = conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)
+  const workerStartedAt =
+    typeof worker.raw.createdAt === 'string'
+      ? worker.raw.createdAt
+      : typeof worker.raw.startedAt === 'string'
+        ? worker.raw.startedAt
+        : conductor.missionStartedAt
+  const workerEndTime =
+    worker.status === 'complete' || worker.status === 'stale'
+      ? new Date(worker.updatedAt ?? new Date().toISOString()).getTime()
+      : conductor.isPaused
+        ? conductor.pausedAtMs ?? now
+        : now
+
+  return (
+    <div
+      key={worker.key}
+      className={cn(
+        'overflow-hidden rounded-2xl border border-[var(--theme-border)] border-l-4 bg-[var(--theme-card)] px-4 py-3',
+        getWorkerBorderClass(worker.status),
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={cn('size-2.5 rounded-full', dot.dotClass)} />
+            <p className="truncate text-sm font-medium text-[var(--theme-text)]">
+              {persona.emoji} {persona.name} <span className="text-[var(--theme-muted)]">·</span> {worker.label}
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-[var(--theme-muted-2)]">{worker.displayName}</p>
+        </div>
+        <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--theme-muted)]">
+          {dot.label}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+          <p className="text-[var(--theme-muted)]">Model</p>
+          <p className="mt-1 truncate text-[var(--theme-text)]">{getShortModelName(worker.model)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+          <p className="text-[var(--theme-muted)]">Tokens</p>
+          <p className="mt-1 text-[var(--theme-text)]">{worker.tokenUsageLabel}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+          <p className="text-[var(--theme-muted)]">Elapsed</p>
+          <p className="mt-1 text-[var(--theme-text)]">{formatElapsedTime(workerStartedAt, workerEndTime)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
+          <p className="text-[var(--theme-muted)]">Last update</p>
+          <p className="mt-1 text-[var(--theme-text)]">{formatRelativeTime(worker.updatedAt, now)}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-4">
+        {workerOutput ? (
+          <Markdown className="max-h-[400px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">{workerOutput}</Markdown>
+        ) : (
+          <CyclingStatus steps={WORKING_STEPS} intervalMs={3500} isPaused={conductor.isPaused} />
+        )}
+      </div>
+    </div>
+  )
 }
 
 function usePreviewAvailability(previewUrl: string | null, enabled: boolean) {
@@ -466,11 +539,7 @@ const ACTIVITY_PAGE_SIZE = 3
 export function Conductor() {
   const conductor = useConductorGateway()
   const [goalDraft, setGoalDraft] = useState('')
-  const [steerDraft, setSteerDraft] = useState('')
   const [continueDraft, setContinueDraft] = useState('')
-  const [steerHistory, setSteerHistory] = useState<string[]>([])
-  const [steerHistoryTimestamps, setSteerHistoryTimestamps] = useState<number[]>([])
-  const [steerError, setSteerError] = useState<string | null>(null)
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed' | 'failed'>('all')
@@ -479,7 +548,6 @@ export function Conductor() {
   const [historyCostExpanded, setHistoryCostExpanded] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const steerInputRef = useRef<HTMLInputElement | null>(null)
   const modelsQuery = useQuery({
     queryKey: ['conductor', 'models'],
     queryFn: async () => {
@@ -521,11 +589,7 @@ export function Conductor() {
   const handleNewMission = () => {
     conductor.resetMission()
     setGoalDraft('')
-    setSteerDraft('')
     setContinueDraft('')
-    setSteerHistory([])
-    setSteerHistoryTimestamps([])
-    setSteerError(null)
     setSelectedTaskId(null)
     setActivityPage(0)
   }
@@ -533,11 +597,7 @@ export function Conductor() {
   const handleSubmit = async () => {
     const trimmed = goalDraft.trim()
     if (!trimmed) return
-    setSteerDraft('')
     setContinueDraft('')
-    setSteerHistory([])
-    setSteerHistoryTimestamps([])
-    setSteerError(null)
     await conductor.sendMission(trimmed)
   }
 
@@ -563,64 +623,7 @@ export function Conductor() {
     ].join('\n')
 
     setContinueDraft('')
-    setSteerDraft('')
-    setSteerHistory([])
-    setSteerHistoryTimestamps([])
-    setSteerError(null)
     await conductor.sendMission(combinedPrompt)
-  }
-
-  const focusSteerInput = () => {
-    if (!steerInputRef.current) return
-    steerInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    window.setTimeout(() => {
-      steerInputRef.current?.focus()
-    }, 150)
-  }
-
-  // Queue of steer messages waiting for active workers
-  const [pendingSteers, setPendingSteers] = useState<string[]>([])
-
-  // Flush pending steers when workers become available
-  useEffect(() => {
-    if (pendingSteers.length === 0) return
-    const activeWorkers = conductor.workers.filter((w) => w.status === 'running')
-    if (activeWorkers.length === 0) return
-
-    const toSend = [...pendingSteers]
-    setPendingSteers([])
-
-    const targets = [...new Set(activeWorkers.map((w) => w.key))]
-    for (const msg of toSend) {
-      void Promise.allSettled(
-        targets.map((key) => conductor.sendSessionMessage(key, `[STEER] ${msg}`)),
-      )
-    }
-  }, [pendingSteers, conductor.workers])
-
-  const handleSendSteer = async () => {
-    const trimmed = steerDraft.trim()
-    if (!trimmed) return
-
-    // Optimistically accept
-    setSteerDraft('')
-    setSteerError(null)
-    setSteerHistory((current) => [...current, trimmed])
-    setSteerHistoryTimestamps((current) => [...current, Date.now()])
-
-    // Only target active WORKERS (not the orchestrator — it's likely already finished)
-    const activeWorkers = conductor.workers.filter((w) => w.status === 'running')
-
-    if (activeWorkers.length === 0) {
-      // Queue it — will auto-send when workers appear
-      setPendingSteers((current) => [...current, trimmed])
-      return
-    }
-
-    const targets = [...new Set(activeWorkers.map((w) => w.key))]
-    void Promise.allSettled(
-      targets.map((key) => conductor.sendSessionMessage(key, `[STEER] ${trimmed}`)),
-    )
   }
 
   const updateSettings = (patch: Partial<typeof conductor.conductorSettings>) => {
@@ -797,6 +800,7 @@ export function Conductor() {
     return truncateContinuationText(summarySource ?? '')
   }, [completeSummary, conductor.streamText, conductor.workerOutputs, conductor.workers])
   const hasMissionHistory = conductor.missionHistory.length > 0
+  const canResetSavedState = hasMissionHistory || conductor.hasPersistedMission
   const filteredHistory = (() => {
     const history = conductor.missionHistory
     if (activityFilter === 'all') return history
@@ -1018,7 +1022,11 @@ export function Conductor() {
         <main className="mx-auto flex min-h-0 w-full max-w-[720px] flex-1 flex-col items-stretch justify-center px-4 py-4 pb-[calc(var(--tabbar-h,80px)+1rem)] md:px-6 md:py-8">
           <div className="w-full space-y-8">
             <div className="space-y-3 text-center">
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
+                  Conductor
+                  <span className="size-2 rounded-full bg-emerald-400" />
+                </div>
                 <button
                   type="button"
                   onClick={() => setSettingsOpen(true)}
@@ -1028,23 +1036,12 @@ export function Conductor() {
                   <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
                 </button>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
-                Conductor
-                <span className="size-2 rounded-full bg-emerald-400" />
-              </div>
               <h1 className="text-2xl font-semibold tracking-tight text-[var(--theme-text)] md:text-4xl">
                 What should the team do next?
               </h1>
               <p className="text-sm text-[var(--theme-muted-2)]">
                 Describe the mission. The agent will decompose it in chat, then the worker sessions will appear here live.
               </p>
-              <button
-                type="button"
-                onClick={handleNewMission}
-                className="text-xs text-[var(--theme-muted)] transition-colors hover:text-[var(--theme-accent)]"
-              >
-                ↻ Reset
-              </button>
             </div>
 
             <section className="w-full overflow-hidden rounded-3xl border border-[var(--theme-border2)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]">
@@ -1308,6 +1305,29 @@ export function Conductor() {
                       <span className="mt-1 block text-sm text-[var(--theme-muted-2)]">Require approval before each task</span>
                     </span>
                   </label>
+
+                  {canResetSavedState ? (
+                    <div className="flex items-center justify-between rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-[var(--theme-text)]">Reset saved state</p>
+                        <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Clear mission history and any persisted Conductor mission state.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsOpen(false)
+                          conductor.resetSavedState()
+                          setGoalDraft('')
+                          setContinueDraft('')
+                          setSelectedTaskId(null)
+                          setActivityPage(0)
+                        }}
+                        className="text-xs text-[var(--theme-muted)] transition-colors hover:text-[var(--theme-accent)]"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1707,19 +1727,6 @@ export function Conductor() {
               >
                 <span>{conductor.isPaused ? '▶' : '⏸'}</span> {conductor.isPausing ? '...' : conductor.isPaused ? 'Resume' : 'Pause'}
               </button>
-              <button
-                type="button"
-                onClick={focusSteerInput}
-                disabled={!conductor.orchestratorSessionKey}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                  conductor.orchestratorSessionKey
-                    ? 'border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-text)]'
-                    : 'cursor-not-allowed border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] opacity-50',
-                )}
-              >
-                <span>💬</span> Steer
-              </button>
             </div>
           </section>
           {conductor.timeoutWarning && (
@@ -1811,72 +1818,14 @@ export function Conductor() {
                   return (
                     <div className="grid gap-3 md:grid-cols-2">
                       {displayWorkers.map((worker, index) => {
-                        const dot = getWorkerDot(worker.status)
-                        const persona = getAgentPersona(index)
-                        const workerOutput =
-                          conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)
-                        const workerStartedAt =
-                          typeof worker.raw.createdAt === 'string'
-                            ? worker.raw.createdAt
-                            : typeof worker.raw.startedAt === 'string'
-                              ? worker.raw.startedAt
-                              : conductor.missionStartedAt
-                          const workerEndTime =
-                            worker.status === 'complete' || worker.status === 'stale'
-                              ? new Date(worker.updatedAt ?? new Date().toISOString()).getTime()
-                              : conductor.isPaused
-                                ? conductor.pausedAtMs ?? now
-                                : now
                         return (
-                          <div
+                          <WorkerCard
                             key={worker.key}
-                            className={cn(
-                              'overflow-hidden rounded-2xl border border-[var(--theme-border)] border-l-4 bg-[var(--theme-card)] px-4 py-3',
-                              getWorkerBorderClass(worker.status),
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className={cn('size-2.5 rounded-full', dot.dotClass)} />
-                                  <p className="truncate text-sm font-medium text-[var(--theme-text)]">
-                                    {persona.emoji} {persona.name} <span className="text-[var(--theme-muted)]">·</span> {worker.label}
-                                  </p>
-                                </div>
-                                <p className="mt-1 text-xs text-[var(--theme-muted-2)]">{worker.displayName}</p>
-                              </div>
-                              <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--theme-muted)]">
-                                {dot.label}
-                              </span>
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                              <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                                <p className="text-[var(--theme-muted)]">Model</p>
-                                <p className="mt-1 truncate text-[var(--theme-text)]">{getShortModelName(worker.model)}</p>
-                              </div>
-                              <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                                <p className="text-[var(--theme-muted)]">Tokens</p>
-                                <p className="mt-1 text-[var(--theme-text)]">{worker.tokenUsageLabel}</p>
-                              </div>
-                              <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                                <p className="text-[var(--theme-muted)]">Elapsed</p>
-                                <p className="mt-1 text-[var(--theme-text)]">{formatElapsedTime(workerStartedAt, workerEndTime)}</p>
-                              </div>
-                              <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                                <p className="text-[var(--theme-muted)]">Last update</p>
-                                <p className="mt-1 text-[var(--theme-text)]">{formatRelativeTime(worker.updatedAt, now)}</p>
-                              </div>
-                            </div>
-
-                            <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-4">
-                              {workerOutput ? (
-                                <Markdown className="max-h-[400px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">{workerOutput}</Markdown>
-                              ) : (
-                                <CyclingStatus steps={WORKING_STEPS} intervalMs={3500} isPaused={conductor.isPaused} />
-                              )}
-                            </div>
-                          </div>
+                            worker={worker}
+                            index={index}
+                            conductor={conductor}
+                            now={now}
+                          />
                         )
                       })}
                       {displayWorkers.length === 0 && (
@@ -1896,71 +1845,14 @@ export function Conductor() {
             <div className="space-y-3">
               <div className="grid gap-3 md:grid-cols-2">
                 {conductor.workers.map((worker, index) => {
-                  const dot = getWorkerDot(worker.status)
-                  const persona = getAgentPersona(index)
-                  const workerOutput = conductor.workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)
-                  const workerStartedAt =
-                    typeof worker.raw.createdAt === 'string'
-                      ? worker.raw.createdAt
-                      : typeof worker.raw.startedAt === 'string'
-                        ? worker.raw.startedAt
-                        : conductor.missionStartedAt
-                  const workerEndTime =
-                    worker.status === 'complete' || worker.status === 'stale'
-                      ? new Date(worker.updatedAt ?? new Date().toISOString()).getTime()
-                      : conductor.isPaused
-                        ? conductor.pausedAtMs ?? now
-                        : now
                   return (
-                    <div
+                    <WorkerCard
                       key={worker.key}
-                      className={cn(
-                        'overflow-hidden rounded-2xl border border-[var(--theme-border)] border-l-4 bg-[var(--theme-card)] px-4 py-3',
-                        getWorkerBorderClass(worker.status),
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={cn('size-2.5 rounded-full', dot.dotClass)} />
-                            <p className="truncate text-sm font-medium text-[var(--theme-text)]">
-                              {persona.emoji} {persona.name} <span className="text-[var(--theme-muted)]">·</span> {worker.label}
-                            </p>
-                          </div>
-                          <p className="mt-1 text-xs text-[var(--theme-muted-2)]">{worker.displayName}</p>
-                        </div>
-                        <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-card2)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--theme-muted)]">
-                          {dot.label}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                          <p className="text-[var(--theme-muted)]">Model</p>
-                          <p className="mt-1 truncate text-[var(--theme-text)]">{getShortModelName(worker.model)}</p>
-                        </div>
-                        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                          <p className="text-[var(--theme-muted)]">Tokens</p>
-                          <p className="mt-1 text-[var(--theme-text)]">{worker.tokenUsageLabel}</p>
-                        </div>
-                        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                          <p className="text-[var(--theme-muted)]">Elapsed</p>
-                          <p className="mt-1 text-[var(--theme-text)]">{formatElapsedTime(workerStartedAt, workerEndTime)}</p>
-                        </div>
-                        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] px-3 py-2">
-                          <p className="text-[var(--theme-muted)]">Last update</p>
-                          <p className="mt-1 text-[var(--theme-text)]">{formatRelativeTime(worker.updatedAt, now)}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-4">
-                        {workerOutput ? (
-                          <Markdown className="max-h-[400px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">{workerOutput}</Markdown>
-                        ) : (
-                          <CyclingStatus steps={WORKING_STEPS} intervalMs={3500} isPaused={conductor.isPaused} />
-                        )}
-                      </div>
-                    </div>
+                      worker={worker}
+                      index={index}
+                      conductor={conductor}
+                      now={now}
+                    />
                   )
                 })}
                 {conductor.workers.length === 0 && (
@@ -1975,77 +1867,6 @@ export function Conductor() {
             </div>
           )}
 
-          <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-5 py-5 shadow-[0_24px_80px_var(--theme-shadow)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Steer</p>
-                <p className="mt-1 text-xs text-[var(--theme-muted-2)]">Send live instructions to the orchestrator without restarting the mission.</p>
-                <p className="mt-2 text-xs text-[var(--theme-muted-2)]">Note: Steer messages are delivered between worker turns and may not affect work already in progress.</p>
-              </div>
-              <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--theme-muted)]">
-                {conductor.orchestratorSessionKey ? 'Live' : 'Waiting'}
-              </span>
-            </div>
-
-            {steerHistory.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {steerHistory.map((message, index) => (
-                  <div
-                    key={`${steerHistoryTimestamps[index] ?? index}-${message}`}
-                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-1.5 text-xs text-[var(--theme-muted)]"
-                  >
-                    <span className="truncate text-[var(--theme-text)]">{message}</span>
-                    {pendingSteers.includes(message) ? (
-                      <span className="shrink-0 text-amber-500">queued</span>
-                    ) : (
-                      <span className="shrink-0 text-[var(--theme-muted-2)]">{formatSteerTimestamp(steerHistoryTimestamps[index] ?? Date.now())}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <form
-              className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void handleSendSteer()
-              }}
-            >
-              <input
-                ref={steerInputRef}
-                type="text"
-                value={steerDraft}
-                onChange={(event) => { setSteerDraft(event.target.value); if (steerError) setSteerError(null) }}
-                placeholder="Send instructions to the agent..."
-                disabled={conductor.isSteering}
-                className="min-w-0 flex-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-4 py-3 text-sm text-[var(--theme-text)] outline-none transition-colors placeholder:text-[var(--theme-muted-2)] focus:border-[var(--theme-accent)] disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              <button
-                type="submit"
-                disabled={!steerDraft.trim() || conductor.isSteering}
-                className={cn(
-                  'inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition-colors sm:min-w-[96px]',
-                  !steerDraft.trim() || conductor.isSteering
-                    ? 'cursor-not-allowed border border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] opacity-60'
-                    : 'border border-[var(--theme-border)] bg-[var(--theme-accent-soft)] text-[var(--theme-text)] hover:border-[var(--theme-accent)] hover:bg-[var(--theme-accent-soft-strong)]',
-                )}
-              >
-                <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} />
-                {conductor.isSteering ? 'Sending' : 'Send'}
-              </button>
-            </form>
-
-            {pendingSteers.length > 0 ? (
-              <p className="mt-3 text-xs text-amber-500">⏳ {pendingSteers.length} steer message{pendingSteers.length > 1 ? 's' : ''} queued — will send when workers spawn.</p>
-            ) : null}
-
-            {steerError ? (
-              <div className="mt-3 rounded-2xl border border-[var(--theme-danger-border)] bg-[var(--theme-danger-soft)] px-4 py-3 text-xs text-[var(--theme-danger)]">
-                {steerError}
-              </div>
-            ) : null}
-          </section>
         </div>
       </main>
     </div>
