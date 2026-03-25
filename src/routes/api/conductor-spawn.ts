@@ -113,6 +113,7 @@ export const Route = createFileRoute('/api/conductor-spawn')({
               },
               sessionTarget: 'isolated',
               enabled: true,
+              deleteAfterRun: true,
             },
           })
 
