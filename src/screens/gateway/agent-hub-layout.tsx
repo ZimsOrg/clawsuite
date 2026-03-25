@@ -112,7 +112,8 @@ export function AgentHubLayout({ agents }: AgentHubLayoutProps) {
 
   const sessions = sessionsQuery.data ?? []
   const agentRows = useMemo(() => deriveAgentRows(agents, sessions), [agents, sessions])
-  const hasActive = agentRows.some((a) => a.status === 'active')
+  // Always show the office as "alive" — agents idle but present
+  const hasActive = true
 
   return (
     <div className="flex min-h-dvh flex-col bg-[var(--theme-bg)] text-[var(--theme-text)]" style={THEME_STYLE}>
@@ -131,7 +132,7 @@ export function AgentHubLayout({ agents }: AgentHubLayoutProps) {
           </Button>
         </div>
 
-        <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-sm">
+        <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-sm" style={{ height: 600 }}>
           <OfficeView
             agentRows={agentRows}
             missionRunning={hasActive}
@@ -139,7 +140,6 @@ export function AgentHubLayout({ agents }: AgentHubLayoutProps) {
             onNewMission={() => void navigate({ to: '/conductor' })}
             processType="parallel"
             companyName="Agent Office"
-            hideHeader
             containerHeight={600}
           />
         </section>
