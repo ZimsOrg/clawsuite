@@ -829,9 +829,11 @@ export function useConductorGateway() {
 
     const fetchAll = async () => {
       for (const worker of workers) {
-        if (worker.totalTokens <= 0) continue
+        // Fetch output for any worker that has tokens OR is complete
+        // (complete workers always have output even if token count hasn't updated yet)
+        if (worker.totalTokens <= 0 && worker.status !== 'complete') continue
         try {
-          const output = await fetchWorkerOutput(worker.key, 5)
+          const output = await fetchWorkerOutput(worker.key, 10)
           if (cancelled || !output) continue
           setWorkerOutputs((current) => {
             if (current[worker.key] === output) return current
@@ -845,8 +847,10 @@ export function useConductorGateway() {
 
     void fetchAll()
 
+    // Keep polling while workers are running, OR while we're missing outputs for complete workers
     const hasRunningWorkers = workers.some((worker) => worker.status === 'running' || worker.status === 'idle')
-    if (!hasRunningWorkers) {
+    const hasMissingOutputs = workers.some((worker) => worker.status === 'complete' && !workerOutputs[worker.key])
+    if (!hasRunningWorkers && !hasMissingOutputs) {
       return () => {
         cancelled = true
       }
@@ -854,7 +858,7 @@ export function useConductorGateway() {
 
     const timer = window.setInterval(() => {
       void fetchAll()
-    }, 5_000)
+    }, hasRunningWorkers ? 5_000 : 2_000)
 
     return () => {
       cancelled = true
