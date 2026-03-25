@@ -780,6 +780,7 @@ export function Conductor() {
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed' | 'failed'>('all')
+  const [activityPage, setActivityPage] = useState(0)
   const [completeCostExpanded, setCompleteCostExpanded] = useState(true)
   const [historyCostExpanded, setHistoryCostExpanded] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -1169,7 +1170,10 @@ export function Conductor() {
       .filter((session) => deriveSessionStatus(session as GatewaySession) === activityFilter)
   })()
   const activityItems: Array<MissionHistoryEntry | GatewaySession> = hasMissionHistory ? filteredHistory : filteredSessions
-  const visibleActivityItems = activityItems.slice(0, 5)
+  const ACTIVITY_PAGE_SIZE = 5
+  const activityTotalPages = Math.max(1, Math.ceil(activityItems.length / ACTIVITY_PAGE_SIZE))
+  const safeActivityPage = Math.min(activityPage, activityTotalPages - 1)
+  const visibleActivityItems = activityItems.slice(safeActivityPage * ACTIVITY_PAGE_SIZE, (safeActivityPage + 1) * ACTIVITY_PAGE_SIZE)
 
   useEffect(() => {
     if (!selectedTaskId) return
@@ -1391,23 +1395,43 @@ export function Conductor() {
               <p className="text-sm text-[var(--theme-muted-2)]">Describe the mission. The agent will decompose it, then workers appear here live.</p>
             </div>
 
-            <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]" style={{ height: 340 }}>
+            <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-[0_24px_80px_var(--theme-shadow)]" style={{ height: 420 }}>
               <OfficeView
                 agentRows={homeOfficeRows}
                 missionRunning={homeOfficeRows.some((a) => a.status === 'active')}
                 onViewOutput={() => {}}
                 processType="parallel"
                 companyName=""
-                containerHeight={340}
+                containerHeight={420}
                 hideHeader
               />
             </section>
 
             {(hasMissionHistory || conductor.recentSessions.length > 0) && (
-              <section className="mt-2 w-full space-y-3">
+              <section className="mt-4 w-full space-y-3">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">Recent Activity</h2>
-                  <span className="ml-auto text-[10px] text-[var(--theme-muted-2)]">Latest 5</span>
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">Recent Missions</h2>
+                  {activityTotalPages > 1 && (
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <span className="text-[10px] text-[var(--theme-muted-2)]">{safeActivityPage + 1}/{activityTotalPages}</span>
+                      <button
+                        type="button"
+                        disabled={safeActivityPage === 0}
+                        onClick={() => setActivityPage((p) => Math.max(0, p - 1))}
+                        className="inline-flex size-6 items-center justify-center rounded-lg border border-[var(--theme-border)] text-xs text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] disabled:opacity-30"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        disabled={safeActivityPage >= activityTotalPages - 1}
+                        onClick={() => setActivityPage((p) => Math.min(activityTotalPages - 1, p + 1))}
+                        className="inline-flex size-6 items-center justify-center rounded-lg border border-[var(--theme-border)] text-xs text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] disabled:opacity-30"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   {(['all', 'completed', 'failed'] as const).map((filter) => (
@@ -1416,6 +1440,7 @@ export function Conductor() {
                       type="button"
                       onClick={() => {
                         setActivityFilter(filter)
+                        setActivityPage(0)
                       }}
                       className={cn(
                         'rounded-full border px-3 py-1 text-[11px] font-medium capitalize transition-colors',
@@ -1443,7 +1468,7 @@ export function Conductor() {
                               <span className="min-w-0 flex-1 truncate font-medium text-[var(--theme-text)]">{entry.goal}</span>
                               <span
                                 className={cn(
-                                  'w-[70px] shrink-0 rounded-full border px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-[0.12em]',
+                                  'w-[76px] shrink-0 rounded-full border px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-[0.12em]',
                                   entry.status === 'completed'
                                     ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-300'
                                     : 'border-red-400/35 bg-red-500/10 text-red-300',
