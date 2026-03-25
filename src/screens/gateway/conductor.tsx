@@ -309,6 +309,13 @@ export function Conductor() {
   }, [conductor.phase])
 
 
+  // Set body background to match Conductor theme so no gray shows behind keyboard/tab bar
+  useEffect(() => {
+    const prev = document.body.style.backgroundColor
+    document.body.style.backgroundColor = 'var(--color-surface)'
+    return () => { document.body.style.backgroundColor = prev }
+  }, [])
+
   const phase: ConductorPhase = useMemo(() => {
     if (conductor.phase === 'idle') return 'home'
     if (conductor.phase === 'decomposing') return 'preview'
