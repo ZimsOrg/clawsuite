@@ -316,6 +316,13 @@ export function Conductor() {
     return 'complete'
   }, [conductor.phase])
 
+  const handleNewMission = () => {
+    conductor.resetMission()
+    setGoalDraft('')
+    setSelectedTaskId(null)
+    setActivityPage(0)
+  }
+
   const handleSubmit = async () => {
     const trimmed = goalDraft.trim()
     if (!trimmed) return
@@ -551,7 +558,7 @@ export function Conductor() {
                       type="button"
                       onClick={() => {
                         conductor.setSelectedHistoryEntry(null)
-                        conductor.resetMission()
+                        handleNewMission()
                       }}
                       className="rounded-xl bg-[var(--theme-accent)] px-5 text-white hover:bg-[var(--theme-accent-strong)]"
                     >
@@ -653,14 +660,23 @@ export function Conductor() {
         <main className="mx-auto flex min-h-0 w-full max-w-[720px] flex-1 flex-col items-stretch justify-center px-6 py-8">
           <div className="w-full space-y-8">
             <div className="relative space-y-3 text-center">
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="absolute right-0 top-0 inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
-                aria-label="Open conductor settings"
-              >
-                <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
-              </button>
+              <div className="absolute right-0 top-0 flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleNewMission}
+                  className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-3 text-[var(--theme-muted)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                >
+                  New Mission
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="inline-flex items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-2 text-[var(--theme-muted)] transition-colors hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent-strong)]"
+                  aria-label="Open conductor settings"
+                >
+                  <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.7} />
+                </button>
+              </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-muted)]">
                 Conductor
                 <span className="size-2 rounded-full bg-emerald-400" />
@@ -979,16 +995,16 @@ export function Conductor() {
                 )}
               </div>
               {conductor.streamError && (
-                <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-600">
                   {conductor.streamError}
                 </div>
               )}
               {conductor.timeoutWarning && (
                 <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-5 py-3">
-                  <p className="text-sm text-amber-700 dark:text-amber-300">⚠️ Planning is taking longer than expected...</p>
+                  <p className="text-sm text-amber-700">⚠️ Planning is taking longer than expected...</p>
                   <Button
                     type="button"
-                    onClick={conductor.resetMission}
+                    onClick={handleNewMission}
                     className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
                   >
                     Cancel
@@ -1049,7 +1065,7 @@ export function Conductor() {
                     </Button>
                     <Button
                       type="button"
-                      onClick={conductor.resetMission}
+                      onClick={handleNewMission}
                       className="rounded-xl bg-[var(--theme-accent)] px-4 text-white hover:bg-[var(--theme-accent-strong)]"
                     >
                       New Mission
@@ -1072,7 +1088,7 @@ export function Conductor() {
                 <div className="flex gap-2">
                   <Button
                     type="button"
-                    onClick={conductor.resetMission}
+                    onClick={handleNewMission}
                     className="rounded-xl bg-[var(--theme-accent)] px-5 text-white hover:bg-[var(--theme-accent-strong)]"
                   >
                     New Mission
