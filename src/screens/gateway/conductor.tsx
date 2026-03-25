@@ -647,6 +647,15 @@ export function Conductor() {
                 )}
               </section>
 
+              {selectedHistoryEntry.outputText && (
+                <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Worker Output</p>
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
+                    <Markdown className="max-h-[600px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">{selectedHistoryEntry.outputText}</Markdown>
+                  </div>
+                </section>
+              )}
+
               {!historySummary && historyWorkerDetails.length === 0 && !selectedHistoryOutputPath && !selectedHistoryEntry.workerSummary?.length && !selectedHistoryEntry.outputText && (
                 <section className="overflow-hidden rounded-3xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
                   <p className="text-center text-sm text-[var(--theme-muted)]">
