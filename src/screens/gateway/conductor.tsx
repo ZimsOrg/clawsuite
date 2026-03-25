@@ -255,7 +255,11 @@ function formatElapsedTime(startIso: string | null | undefined, now: number): st
   if (!startIso) return '0s'
   const startMs = new Date(startIso).getTime()
   if (!Number.isFinite(startMs)) return '0s'
-  const totalSeconds = Math.max(0, Math.floor((now - startMs) / 1000))
+  return formatElapsedMilliseconds(now - startMs)
+}
+
+function formatElapsedMilliseconds(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000))
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
@@ -302,6 +306,58 @@ function getWorkerBorderClass(status: 'running' | 'complete' | 'stale' | 'idle')
   if (status === 'running') return 'border-l-sky-400'
   if (status === 'idle') return 'border-l-amber-400'
   return 'border-l-red-400'
+}
+
+function usePreviewAvailability(previewUrl: string | null, enabled: boolean) {
+  const [failedProbes, setFailedProbes] = useState(0)
+  const [timedOut, setTimedOut] = useState(false)
+  const lastProbeRef = useRef(0)
+
+  useEffect(() => {
+    setFailedProbes(0)
+    setTimedOut(false)
+    lastProbeRef.current = 0
+  }, [enabled, previewUrl])
+
+  useEffect(() => {
+    if (!enabled || !previewUrl) return
+    const timer = window.setTimeout(() => setTimedOut(true), 10_000)
+    return () => window.clearTimeout(timer)
+  }, [enabled, previewUrl])
+
+  const exhausted = enabled && !!previewUrl && (failedProbes >= 5 || timedOut)
+
+  const probeQuery = useQuery({
+    queryKey: ['conductor', 'preview-probe', previewUrl],
+    queryFn: async () => {
+      if (!previewUrl) return false
+      try {
+        const res = await fetch(previewUrl)
+        if (!res.ok) return false
+        const text = await res.text()
+        return text.length > 20 && (text.includes('<') || text.includes('html'))
+      } catch {
+        return false
+      }
+    },
+    enabled: enabled && !!previewUrl && !exhausted,
+    retry: false,
+    refetchInterval: (query) => (query.state.data === true || exhausted ? false : 2_500),
+    staleTime: 5_000,
+  })
+
+  useEffect(() => {
+    if (!enabled || !previewUrl || probeQuery.data === true || probeQuery.dataUpdatedAt === 0) return
+    if (lastProbeRef.current === probeQuery.dataUpdatedAt) return
+    lastProbeRef.current = probeQuery.dataUpdatedAt
+    setFailedProbes((current) => current + 1)
+  }, [enabled, previewUrl, probeQuery.data, probeQuery.dataUpdatedAt])
+
+  return {
+    ready: probeQuery.data === true,
+    loading: enabled && !!previewUrl && !exhausted && probeQuery.data !== true,
+    unavailable: enabled && !!previewUrl && exhausted && probeQuery.data !== true,
+  }
 }
 
 function getShortModelName(model: string | null | undefined): string {
@@ -388,7 +444,6 @@ export function Conductor() {
   const [steerHistory, setSteerHistory] = useState<string[]>([])
   const [steerHistoryTimestamps, setSteerHistoryTimestamps] = useState<number[]>([])
   const [steerError, setSteerError] = useState<string | null>(null)
-  const [isPaused, setIsPaused] = useState(false)
   const [selectedAction, setSelectedAction] = useState<QuickActionId>('build')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed' | 'failed'>('all')
@@ -588,42 +643,8 @@ export function Conductor() {
     ? `/api/preview-file?path=${encodeURIComponent(`${selectedHistoryOutputPath}/index.html`)}`
     : null
 
-  const selectedHistoryPreviewReady = useQuery({
-    queryKey: ['conductor', 'history-preview-probe', selectedHistoryPreviewUrl],
-    queryFn: async () => {
-      if (!selectedHistoryPreviewUrl) return false
-      try {
-        const res = await fetch(selectedHistoryPreviewUrl)
-        if (!res.ok) return false
-        const text = await res.text()
-        return text.length > 20 && (text.includes('<') || text.includes('html'))
-      } catch {
-        return false
-      }
-    },
-    enabled: !!selectedHistoryPreviewUrl && !!conductor.selectedHistoryEntry,
-    refetchInterval: (query) => (query.state.data === true ? false : 2_500),
-    staleTime: 5_000,
-  })
-
-  const previewReady = useQuery({
-    queryKey: ['conductor', 'preview-probe', previewUrl],
-    queryFn: async () => {
-      if (!previewUrl) return false
-      try {
-        const res = await fetch(previewUrl)
-        if (!res.ok) return false
-        // Check it's actually HTML, not an error page
-        const text = await res.text()
-        return text.length > 20 && (text.includes('<') || text.includes('html'))
-      } catch {
-        return false
-      }
-    },
-    enabled: !!previewUrl && phase === 'complete',
-    refetchInterval: (query) => (query.state.data === true ? false : 2_500),
-    staleTime: 5_000,
-  })
+  const selectedHistoryPreview = usePreviewAvailability(selectedHistoryPreviewUrl, !!conductor.selectedHistoryEntry)
+  const previewState = usePreviewAvailability(previewUrl, phase === 'complete')
 
   const completedTaskOutputs = useMemo(() => {
     return conductor.tasks
@@ -705,6 +726,7 @@ export function Conductor() {
     if (selectedHistoryEntry) {
       const historyWorkerDetails = selectedHistoryEntry.workerDetails ?? []
       const historySummary = selectedHistoryEntry.completeSummary ?? selectedHistoryEntry.streamText
+      const historyOutputText = selectedHistoryEntry.outputText?.trim() || selectedHistoryEntry.streamText?.trim() || ''
       const historyStatusLabel = selectedHistoryEntry.status === 'completed' ? 'Complete' : 'Stopped'
       const historyStatusClasses =
         selectedHistoryEntry.status === 'completed'
@@ -749,7 +771,7 @@ export function Conductor() {
                 </div>
               </div>
 
-              {selectedHistoryOutputPath && selectedHistoryPreviewReady.data === true ? (
+              {selectedHistoryOutputPath && selectedHistoryPreview.ready ? (
                 <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -774,13 +796,15 @@ export function Conductor() {
                     />
                   </div>
                 </section>
-              ) : selectedHistoryOutputPath ? (
+              ) : selectedHistoryOutputPath && selectedHistoryPreview.loading ? (
                 <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
                   <div className="flex items-center gap-3 text-sm text-[var(--theme-muted)]">
                     <div className="size-4 animate-spin rounded-full border-2 border-[var(--theme-border)] border-t-[var(--theme-accent)]" />
                     Loading output preview…
                   </div>
                 </section>
+              ) : selectedHistoryOutputPath && selectedHistoryPreview.unavailable ? (
+                <p className="px-1 text-sm text-[var(--theme-muted)]">No preview available.</p>
               ) : null}
 
               <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
@@ -831,16 +855,16 @@ export function Conductor() {
                 )}
               </section>
 
-              {selectedHistoryEntry.outputText && (
+              {historyOutputText && (
                 <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">Worker Output</p>
                   <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-5 py-4">
-                    <Markdown className="max-h-[600px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">{selectedHistoryEntry.outputText}</Markdown>
+                    <Markdown className="max-h-[600px] max-w-none overflow-auto text-sm text-[var(--theme-text)]">{historyOutputText}</Markdown>
                   </div>
                 </section>
               )}
 
-              {!historySummary && historyWorkerDetails.length === 0 && !selectedHistoryOutputPath && !selectedHistoryEntry.workerSummary?.length && !selectedHistoryEntry.outputText && (
+              {!historySummary && historyWorkerDetails.length === 0 && !selectedHistoryOutputPath && !selectedHistoryEntry.workerSummary?.length && !historyOutputText && (
                 <section className="overflow-hidden rounded-3xl border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] p-6">
                   <p className="text-center text-sm text-[var(--theme-muted)]">
                     No detailed output was captured for this mission.
@@ -1297,7 +1321,7 @@ export function Conductor() {
               </div>
             </div>
 
-            {completePhaseProjectPath && previewReady.data === true ? (
+            {completePhaseProjectPath && previewState.ready ? (
               <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -1324,13 +1348,15 @@ export function Conductor() {
                   />
                 </div>
               </section>
-            ) : (completePhaseProjectPath || Object.keys(conductor.workerOutputs).length === 0) && !conductor.streamError ? (
+            ) : completePhaseProjectPath && previewState.loading && !conductor.streamError ? (
               <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-6 shadow-[0_24px_80px_var(--theme-shadow)]">
                 <div className="flex items-center gap-3 text-sm text-[var(--theme-muted)]">
                   <div className="size-4 animate-spin rounded-full border-2 border-[var(--theme-border)] border-t-[var(--theme-accent)]" />
                   Loading output preview…
                 </div>
               </section>
+            ) : completePhaseProjectPath && previewState.unavailable && !conductor.streamError ? (
+              <p className="px-1 text-sm text-[var(--theme-muted)]">No preview available.</p>
             ) : null}
 
             {conductor.tasks.length > 1 && completedTaskOutputs.length > 0 && (
@@ -1453,12 +1479,19 @@ export function Conductor() {
             <div className="text-center">
               <h1 className="line-clamp-2 text-xl font-semibold tracking-tight text-[var(--theme-text)] sm:text-2xl">{conductor.goal}</h1>
               <div className="mt-2 flex items-center justify-center gap-2 text-xs text-[var(--theme-muted)]">
-                <span>{formatElapsedTime(conductor.missionStartedAt, now)}</span>
+                <span>{formatElapsedMilliseconds(conductor.isPaused ? conductor.pausedElapsedMs : conductor.missionElapsedMs)}</span>
                 <span className="text-[var(--theme-border)]">·</span>
                 <span>{completedWorkers}/{Math.max(totalWorkers, 1)} complete</span>
                 <span className="text-[var(--theme-border)]">·</span>
                 <span>{activeWorkerCount} active</span>
               </div>
+              {conductor.isPaused ? (
+                <div className="mt-3 flex justify-center">
+                  <span className="rounded-full border border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--theme-accent-strong)] animate-pulse">
+                    Paused
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-[var(--theme-border)]">
               <div className="h-full rounded-full bg-[var(--theme-accent)] transition-[width] duration-500 ease-out" style={{ width: `${missionProgress}%` }} />
@@ -1477,8 +1510,7 @@ export function Conductor() {
                 onClick={async () => {
                   if (!conductor.orchestratorSessionKey) return
                   try {
-                    await conductor.pauseAgent(conductor.orchestratorSessionKey, !isPaused)
-                    setIsPaused(!isPaused)
+                    await conductor.pauseAgent(conductor.orchestratorSessionKey, !conductor.isPaused)
                   } catch {
                     // best effort
                   }
@@ -1487,12 +1519,12 @@ export function Conductor() {
                   'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                   !conductor.orchestratorSessionKey || conductor.isPausing
                     ? 'cursor-not-allowed border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] opacity-50'
-                    : isPaused
+                    : conductor.isPaused
                       ? 'border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] text-[var(--theme-accent-strong)] hover:bg-[var(--theme-accent-soft-strong)]'
                       : 'border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-text)]',
                 )}
               >
-                <span>{isPaused ? '▶' : '⏸'}</span> {conductor.isPausing ? '...' : isPaused ? 'Resume' : 'Pause'}
+                <span>{conductor.isPaused ? '▶' : '⏸'}</span> {conductor.isPausing ? '...' : conductor.isPaused ? 'Resume' : 'Pause'}
               </button>
               <button
                 type="button"

@@ -41,6 +41,10 @@ type PersistedMission = {
   goal: string
   phase: MissionPhase
   missionStartedAt: string | null
+  isPaused: boolean
+  pausedElapsedMs: number
+  accumulatedPausedMs: number
+  pauseStartedAt: string | null
   workerKeys: string[]
   workerLabels: string[]
   workerOutputs: Record<string, string>
@@ -196,6 +200,14 @@ function loadPersistedMission(): PersistedMission | null {
         : {}
     const missionStartedAt =
       parsed.missionStartedAt === null || parsed.missionStartedAt === undefined ? null : toIso(parsed.missionStartedAt)
+    const isPaused = parsed.isPaused === true
+    const pausedElapsedMs = typeof parsed.pausedElapsedMs === 'number' && Number.isFinite(parsed.pausedElapsedMs) ? Math.max(0, parsed.pausedElapsedMs) : 0
+    const accumulatedPausedMs =
+      typeof parsed.accumulatedPausedMs === 'number' && Number.isFinite(parsed.accumulatedPausedMs)
+        ? Math.max(0, parsed.accumulatedPausedMs)
+        : 0
+    const pauseStartedAt =
+      parsed.pauseStartedAt === null || parsed.pauseStartedAt === undefined ? null : toIso(parsed.pauseStartedAt)
     const completedAt = parsed.completedAt === null || parsed.completedAt === undefined ? null : toIso(parsed.completedAt)
     const tasks = Array.isArray(parsed.tasks)
       ? parsed.tasks
@@ -242,6 +254,10 @@ function loadPersistedMission(): PersistedMission | null {
       goal: isStale ? '' : goal,
       phase: isStale ? 'idle' : phase,
       missionStartedAt: isStale ? null : missionStartedAt,
+      isPaused: isStale ? false : isPaused,
+      pausedElapsedMs: isStale ? 0 : pausedElapsedMs,
+      accumulatedPausedMs: isStale ? 0 : accumulatedPausedMs,
+      pauseStartedAt: isStale ? null : pauseStartedAt,
       workerKeys: isStale ? [] : workerKeys,
       workerLabels: isStale ? [] : workerLabels,
       workerOutputs,
@@ -536,15 +552,19 @@ function buildCompleteSummary(params: {
 }
 
 function buildMissionOutputText(workers: ConductorWorker[], workerOutputs: Record<string, string>, streamText: string): string {
-  const combined = [
-    ...Object.values(workerOutputs),
-    ...workers.map((worker) => getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)),
-    streamText,
-  ]
-    .map((value) => value.trim())
-    .find(Boolean)
+  const workerSections = workers
+    .map((worker) => {
+      const output = (workerOutputs[worker.key] ?? getLastAssistantMessage(worker.raw.messages as HistoryMessage[] | undefined)).trim()
+      if (!output) return null
+      return `### ${worker.displayName}\n\n${output}`
+    })
+    .filter((section): section is string => section !== null)
 
-  return combined ? combined.slice(0, 500) : ''
+  if (workerSections.length > 0) {
+    return workerSections.join('\n\n---\n\n').slice(0, 5000)
+  }
+
+  return streamText.trim().slice(0, 5000)
 }
 
 async function fetchWorkerOutput(sessionKey: string, limit = 5): Promise<string> {
@@ -566,6 +586,10 @@ export function useConductorGateway() {
   const [planText, setPlanText] = useState(() => initialMission?.planText ?? '')
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([])
   const [missionStartedAt, setMissionStartedAt] = useState<string | null>(() => initialMission?.missionStartedAt ?? null)
+  const [isPaused, setIsPaused] = useState(() => initialMission?.isPaused ?? false)
+  const [pausedElapsedMs, setPausedElapsedMs] = useState(() => initialMission?.pausedElapsedMs ?? 0)
+  const [accumulatedPausedMs, setAccumulatedPausedMs] = useState(() => initialMission?.accumulatedPausedMs ?? 0)
+  const [pauseStartedAt, setPauseStartedAt] = useState<string | null>(() => initialMission?.pauseStartedAt ?? null)
   const [completedAt, setCompletedAt] = useState<string | null>(() => initialMission?.completedAt ?? null)
   const [streamError, setStreamError] = useState<string | null>(null)
   const [timeoutWarning, setTimeoutWarning] = useState(false)
@@ -663,6 +687,16 @@ export function useConductorGateway() {
     () => workers.filter((worker) => worker.status === 'running' || worker.status === 'idle'),
     [workers],
   )
+
+  const getMissionElapsedMs = (referenceTime = Date.now()) => {
+    if (!missionStartedAt) return 0
+    const startedMs = new Date(missionStartedAt).getTime()
+    if (!Number.isFinite(startedMs)) return 0
+    const pauseStartedMs = pauseStartedAt ? new Date(pauseStartedAt).getTime() : NaN
+    const inFlightPausedMs =
+      isPaused && Number.isFinite(pauseStartedMs) ? Math.max(0, referenceTime - pauseStartedMs) : 0
+    return Math.max(0, referenceTime - startedMs - accumulatedPausedMs - inFlightPausedMs)
+  }
 
   useEffect(() => {
     if (missionWorkerLabels.size === 0 || workers.length === 0) return
@@ -879,7 +913,7 @@ export function useConductorGateway() {
       projectPath: outputPath,
       outputPath,
       workerSummary: workerSummary.length > 0 ? workerSummary : undefined,
-      outputText: outputText || undefined,
+      outputText,
       streamText: streamText ? streamText.slice(0, 5000) : undefined,
       completeSummary,
       workerDetails: workerDetails.length > 0 ? workerDetails : undefined,
@@ -908,6 +942,10 @@ export function useConductorGateway() {
       goal,
       phase,
       missionStartedAt,
+      isPaused,
+      pausedElapsedMs,
+      accumulatedPausedMs,
+      pauseStartedAt,
       workerKeys: [...missionWorkerKeys],
       workerLabels: [...missionWorkerLabels],
       workerOutputs,
@@ -916,7 +954,7 @@ export function useConductorGateway() {
       completedAt,
       tasks,
     })
-  }, [phase, goal, missionStartedAt, completedAt, missionWorkerKeys, missionWorkerLabels, workerOutputs, streamText, planText, tasks])
+  }, [phase, goal, missionStartedAt, isPaused, pausedElapsedMs, accumulatedPausedMs, pauseStartedAt, completedAt, missionWorkerKeys, missionWorkerLabels, workerOutputs, streamText, planText, tasks])
 
   const dismissTimeoutWarning = () => {
     lastActivityAtRef.current = Date.now()
@@ -937,6 +975,10 @@ export function useConductorGateway() {
     lastActivityAtRef.current = Date.now()
     lastWorkerSnapshotRef.current = ''
     setMissionStartedAt(null)
+    setIsPaused(false)
+    setPausedElapsedMs(0)
+    setAccumulatedPausedMs(0)
+    setPauseStartedAt(null)
     setCompletedAt(null)
     setMissionWorkerKeys(new Set())
     setMissionWorkerLabels(new Set())
@@ -962,6 +1004,10 @@ export function useConductorGateway() {
       setStreamEvents([])
       setStreamError(null)
       setCompletedAt(null)
+      setIsPaused(false)
+      setPausedElapsedMs(0)
+      setAccumulatedPausedMs(0)
+      setPauseStartedAt(null)
       setMissionWorkerKeys(new Set())
       setMissionWorkerLabels(new Set())
       setWorkerOutputs({})
@@ -1051,6 +1097,22 @@ export function useConductorGateway() {
         const text = await response.text().catch(() => '')
         throw new Error(text || `Pause request failed (${response.status})`)
       }
+
+      const now = Date.now()
+      if (pause) {
+        setPausedElapsedMs(getMissionElapsedMs(now))
+        setPauseStartedAt(new Date(now).toISOString())
+        setIsPaused(true)
+        return
+      }
+
+      const pauseStartedMs = pauseStartedAt ? new Date(pauseStartedAt).getTime() : NaN
+      const additionalPausedMs =
+        Number.isFinite(pauseStartedMs) ? Math.max(0, now - pauseStartedMs) : 0
+      setAccumulatedPausedMs((current) => current + additionalPausedMs)
+      setPauseStartedAt(null)
+      setIsPaused(false)
+      setPausedElapsedMs(0)
     },
   })
 
@@ -1069,6 +1131,8 @@ export function useConductorGateway() {
 
     // Transition to complete with error instead of clearing — so it shows as failed in activity
     setStreamError('Mission stopped by user')
+    setIsPaused(false)
+    setPauseStartedAt(null)
     setCompletedAt(new Date().toISOString())
     setPhase('complete')
   }
@@ -1092,6 +1156,9 @@ export function useConductorGateway() {
     timeoutWarning,
     dismissTimeoutWarning,
     missionStartedAt,
+    isPaused,
+    pausedElapsedMs,
+    missionElapsedMs: getMissionElapsedMs(),
     completedAt,
     tasks,
     workers,
