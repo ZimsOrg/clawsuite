@@ -1434,14 +1434,15 @@ export function Conductor() {
               </div>
             </section>
 
-            <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-sm" style={{ height: 420 }}>
+            <section className="overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] shadow-sm" style={{ height: 380 }}>
               <OfficeView
                 agentRows={homeOfficeRows}
                 missionRunning={homeOfficeRows.some((a) => a.status === 'active')}
                 onViewOutput={() => {}}
                 processType="parallel"
                 companyName="Agent Office"
-                containerHeight={420}
+                containerHeight={380}
+                hideHeader
               />
             </section>
 
