@@ -387,6 +387,8 @@ export function useConductorGateway() {
   const doneRef = useRef(initialMission?.phase === 'complete')
   const seenToolCallRef = useRef(false)
   const historySavedRef = useRef(false)
+  const lastActivityAtRef = useRef<number>(Date.now())
+  const lastWorkerSnapshotRef = useRef('')
 
   const sessionsQuery = useQuery({
     queryKey: ['conductor', 'gateway', 'sessions'],
@@ -511,20 +513,47 @@ export function useConductorGateway() {
   useEffect(() => {
     if (phase !== 'running' && phase !== 'decomposing') {
       setTimeoutWarning(false)
+      lastActivityAtRef.current = Date.now()
+      lastWorkerSnapshotRef.current = ''
       return
     }
 
-    const timer = window.setTimeout(() => {
-      if (workers.length === 0 && phase === 'running') {
-        setTimeoutWarning(true)
-      }
-      if (phase === 'decomposing' && !streamText) {
-        setTimeoutWarning(true)
-      }
-    }, 60_000)
+    lastActivityAtRef.current = Date.now()
+    setTimeoutWarning(false)
+  }, [phase])
 
-    return () => window.clearTimeout(timer)
-  }, [phase, workers.length, streamText])
+  useEffect(() => {
+    if (phase !== 'running' && phase !== 'decomposing') return
+
+    const workerSnapshot = workers
+      .map((worker) => `${worker.key}:${worker.updatedAt ?? ''}:${worker.totalTokens}:${worker.status}`)
+      .join('|')
+
+    if (workerSnapshot && workerSnapshot !== lastWorkerSnapshotRef.current) {
+      lastWorkerSnapshotRef.current = workerSnapshot
+      lastActivityAtRef.current = Date.now()
+      setTimeoutWarning(false)
+    }
+  }, [phase, workers])
+
+  useEffect(() => {
+    if (phase !== 'running' && phase !== 'decomposing') return
+
+    lastActivityAtRef.current = Date.now()
+    setTimeoutWarning(false)
+  }, [phase, streamText, planText, streamEvents.length])
+
+  useEffect(() => {
+    if (phase !== 'running' && phase !== 'decomposing') return
+
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastActivityAtRef.current >= 60_000) {
+        setTimeoutWarning(true)
+      }
+    }, 1_000)
+
+    return () => window.clearInterval(timer)
+  }, [phase])
 
   useEffect(() => {
     if (phase !== 'running') return
@@ -663,6 +692,11 @@ export function useConductorGateway() {
     })
   }, [phase, goal, missionStartedAt, completedAt, missionWorkerKeys, missionWorkerLabels, workerOutputs, streamText, planText, tasks])
 
+  const dismissTimeoutWarning = () => {
+    lastActivityAtRef.current = Date.now()
+    setTimeoutWarning(false)
+  }
+
   const clearMissionState = () => {
     doneRef.current = false
     clearPersistedMission()
@@ -673,6 +707,8 @@ export function useConductorGateway() {
     setStreamEvents([])
     setStreamError(null)
     setTimeoutWarning(false)
+    lastActivityAtRef.current = Date.now()
+    lastWorkerSnapshotRef.current = ''
     setMissionStartedAt(null)
     setCompletedAt(null)
     setMissionWorkerKeys(new Set())
@@ -688,6 +724,8 @@ export function useConductorGateway() {
       const trimmed = nextGoal.trim()
       if (!trimmed) throw new Error('Mission goal required')
       doneRef.current = false
+      lastActivityAtRef.current = Date.now()
+      lastWorkerSnapshotRef.current = ''
       setTimeoutWarning(false)
       setGoal(trimmed)
       setStreamText('')
@@ -781,6 +819,7 @@ export function useConductorGateway() {
     streamEvents,
     streamError,
     timeoutWarning,
+    dismissTimeoutWarning,
     missionStartedAt,
     completedAt,
     tasks,

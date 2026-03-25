@@ -39,6 +39,10 @@ const THEME_STYLE: CSSProperties = {
   ['--theme-danger-soft' as string]: 'color-mix(in srgb, var(--theme-danger) 12%, transparent)',
   ['--theme-danger-soft-strong' as string]: 'color-mix(in srgb, var(--theme-danger) 18%, transparent)',
   ['--theme-danger-border' as string]: 'color-mix(in srgb, var(--theme-danger) 35%, white)',
+  ['--theme-warning' as string]: 'var(--color-amber-600, #d97706)',
+  ['--theme-warning-soft' as string]: 'color-mix(in srgb, var(--theme-warning) 12%, transparent)',
+  ['--theme-warning-soft-strong' as string]: 'color-mix(in srgb, var(--theme-warning) 18%, transparent)',
+  ['--theme-warning-border' as string]: 'color-mix(in srgb, var(--theme-warning) 35%, white)',
 }
 
 const QUICK_ACTIONS: Array<{
@@ -667,36 +671,31 @@ export function Conductor() {
               </div>
             </div>
             {conductor.streamError && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/40 bg-red-500/10 px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-red-500">❌</span>
-                  <div>
-                    <p className="text-sm font-medium text-red-600 dark:text-red-400">Mission failed</p>
-                    <p className="text-xs text-red-500 dark:text-red-400/80">{conductor.streamError}</p>
+              <div className="rounded-2xl border border-[var(--theme-danger-border)] bg-[var(--theme-danger-soft)] px-5 py-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="pt-0.5 text-[var(--theme-danger)]">❌</span>
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--theme-danger)]">Mission failed</p>
+                      <p className="mt-1 text-sm text-[var(--theme-danger)]/90">{conductor.streamError}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => void conductor.retryMission()}
-                    className="rounded-xl border border-red-400/40 bg-red-500/10 px-4 text-red-600 hover:bg-red-500/20 dark:text-red-300"
-                  >
-                    Retry Mission
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => void conductor.stopMission()}
-                    className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
-                  >
-                    Stop Mission
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={conductor.resetMission}
-                    className="rounded-xl bg-[var(--theme-accent)] px-4 text-white hover:bg-[var(--theme-accent-strong)]"
-                  >
-                    New Mission
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      onClick={() => void conductor.retryMission()}
+                      className="rounded-xl border border-[var(--theme-danger-border)] bg-[var(--theme-danger-soft)] px-4 text-[var(--theme-danger)] hover:bg-[var(--theme-danger-soft-strong)]"
+                    >
+                      Retry Mission
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={conductor.resetMission}
+                      className="rounded-xl bg-[var(--theme-accent)] px-4 text-white hover:bg-[var(--theme-accent-strong)]"
+                    >
+                      New Mission
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -896,6 +895,32 @@ export function Conductor() {
               </button>
             </div>
           </section>
+          {conductor.timeoutWarning && (
+            <section className="rounded-2xl border border-[var(--theme-warning-border)] bg-[var(--theme-warning-soft)] px-5 py-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--theme-warning)]">⏳ Mission appears stalled — no activity for 60 seconds</p>
+                  <p className="mt-1 text-xs text-[var(--theme-muted)]">Sometimes the workers are still alive, but the stream went quiet. Your call.</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    onClick={conductor.dismissTimeoutWarning}
+                    className="rounded-xl border border-[var(--theme-warning-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
+                  >
+                    Keep Waiting
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void conductor.stopMission()}
+                    className="rounded-xl border border-[var(--theme-warning-border)] bg-[var(--theme-warning-soft)] px-4 text-[var(--theme-warning)] hover:bg-[var(--theme-warning-soft-strong)]"
+                  >
+                    Stop Mission
+                  </Button>
+                </div>
+              </div>
+            </section>
+          )}
           {conductor.workers.length > 0 && (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {conductor.workers.map((worker, index) => {
