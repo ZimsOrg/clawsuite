@@ -73,12 +73,15 @@ function buildOrchestratorPrompt(
     `Goal: ${goal}`,
     ...(options.orchestratorModel ? ['', `Use model: ${options.orchestratorModel} for the orchestrator`] : []),
     ...(options.workerModel ? ['', `Use model: ${options.workerModel} for all workers`] : []),
-    ...(options.maxParallel > 1 ? ['', `Run up to ${options.maxParallel} workers in parallel when tasks are independent`] : []),
+    ...(options.maxParallel > 1
+      ? ['', `Run up to ${options.maxParallel} workers in parallel when tasks are independent`]
+      : ['', 'Run tasks sequentially — only ONE worker at a time. Wait for each worker to finish before spawning the next.']),
     ...(options.supervised ? ['', 'Supervised mode is enabled. Require approval before each task.'] : []),
     '',
     '## Critical Rules',
     '- Use sessions_spawn to create worker agents for each task',
     '- Do NOT do the work yourself — spawn workers',
+    '- For simple tasks (single file, quick mockup), use ONLY 1 task with 1 worker — do not over-decompose',
     '- Do NOT ask for confirmation — start immediately',
     '- Label workers as "worker-<task-slug>" so the UI can track them',
     '- Each worker gets a self-contained prompt with the task + exit criteria',
