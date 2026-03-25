@@ -934,12 +934,12 @@ export function AgentViewPanel() {
                 {/* Main Agent Card (includes usage section) */}
                 <OrchestratorCard compact={false} />
 
-                {/* Swarm — agent cards — only show when there's something */}
+                {/* Agents — agent cards — only show when there's something */}
                 {(activeCount > 0 || queuedAgents.length > 0 || historyAgents.length > 0) && <section className="rounded-2xl border border-primary-300/70 bg-primary-200/35 p-1">
-                  {/* Centered Swarm pill */}
+                  {/* Centered Agents pill */}
                   <div className="mb-1 flex justify-center">
                     <span className="rounded-full border border-primary-300/70 bg-primary-100/80 px-3 py-0.5 text-[10px] font-medium text-primary-600 shadow-sm">
-                      Swarm
+                      Agents
                     </span>
                   </div>
 
@@ -1153,7 +1153,7 @@ export function AgentViewPanel() {
                         }
                         className="text-[11px] text-pretty text-primary-600 py-1"
                       >
-                        No active agents. Spawn agents from chat or CLI to see
+                        No active agents. Launch a mission from Conductor to see
                         them here.
                       </p>
                     )}
@@ -1336,7 +1336,7 @@ export function AgentViewPanel() {
                   <section className="rounded-2xl border border-primary-300/70 bg-primary-200/35 p-1">
                     <div className="mb-1 flex justify-center">
                       <span className="rounded-full border border-primary-300/70 bg-primary-100/80 px-3 py-0.5 text-[10px] font-medium text-primary-600 shadow-sm">
-                        Swarm
+                        Agents
                       </span>
                     </div>
                     <div className="mb-1 flex items-center justify-between px-1">
