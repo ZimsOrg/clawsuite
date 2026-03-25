@@ -8,7 +8,6 @@ import {
   Clock01Icon,
   ComputerTerminal01Icon,
   File01Icon,
-  Home01Icon,
   ListViewIcon,
   MessageMultiple01Icon,
   Moon02Icon,
@@ -30,7 +29,6 @@ type OverflowItem = {
 }
 
 const SYSTEM_ITEMS: Array<OverflowItem> = [
-  { icon: File01Icon, label: 'Files', to: '/files' },
   { icon: BrainIcon, label: 'Memory', to: '/memory' },
   { icon: Task01Icon, label: 'Tasks', to: '/tasks' },
   { icon: ComputerTerminal01Icon, label: 'Terminal', to: '/terminal' },
@@ -43,7 +41,6 @@ const SYSTEM_ITEMS: Array<OverflowItem> = [
 const GATEWAY_ITEMS: Array<OverflowItem> = [
   { icon: MessageMultiple01Icon, label: 'Chat', to: '/chat' },
   { icon: Rocket01Icon, label: 'Conductor', to: '/conductor' },
-  { icon: Home01Icon, label: 'Dashboard', to: '/dashboard' },
   { icon: ServerStack01Icon, label: 'Channels', to: '/channels' },
   { icon: ChartLineData02Icon, label: 'Costs', to: '/costs' },
 ]
