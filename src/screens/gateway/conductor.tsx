@@ -35,6 +35,10 @@ const THEME_STYLE: CSSProperties = {
   ['--theme-accent-soft' as string]: 'color-mix(in srgb, var(--color-accent-500) 12%, transparent)',
   ['--theme-accent-soft-strong' as string]: 'color-mix(in srgb, var(--color-accent-500) 18%, transparent)',
   ['--theme-shadow' as string]: 'color-mix(in srgb, var(--color-primary-950) 14%, transparent)',
+  ['--theme-danger' as string]: 'var(--color-red-600, #dc2626)',
+  ['--theme-danger-soft' as string]: 'color-mix(in srgb, var(--theme-danger) 12%, transparent)',
+  ['--theme-danger-soft-strong' as string]: 'color-mix(in srgb, var(--theme-danger) 18%, transparent)',
+  ['--theme-danger-border' as string]: 'color-mix(in srgb, var(--theme-danger) 35%, white)',
 }
 
 const QUICK_ACTIONS: Array<{
@@ -680,8 +684,15 @@ export function Conductor() {
                   </Button>
                   <Button
                     type="button"
-                    onClick={conductor.resetMission}
+                    onClick={() => void conductor.stopMission()}
                     className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
+                  >
+                    Stop Mission
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={conductor.resetMission}
+                    className="rounded-xl bg-[var(--theme-accent)] px-4 text-white hover:bg-[var(--theme-accent-strong)]"
                   >
                     New Mission
                   </Button>
@@ -698,6 +709,13 @@ export function Conductor() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => void conductor.stopMission()}
+                    className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-5 text-[var(--theme-text)] hover:bg-[var(--theme-card2)]"
+                  >
+                    Stop Mission
+                  </Button>
                   <Button
                     type="button"
                     onClick={conductor.resetMission}
@@ -856,10 +874,10 @@ export function Conductor() {
             <div className="mt-3 flex items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={conductor.resetMission}
-                className="inline-flex items-center gap-1.5 rounded-full border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                onClick={() => void conductor.stopMission()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--theme-danger-border, color-mix(in srgb, var(--theme-danger) 35%, white))] bg-[var(--theme-danger-soft, color-mix(in srgb, var(--theme-danger) 12%, transparent))] px-3 py-1.5 text-xs font-medium text-[var(--theme-danger)] transition-colors hover:bg-[var(--theme-danger-soft-strong, color-mix(in srgb, var(--theme-danger) 18%, transparent))]"
               >
-                <span>■</span> Stop
+                <span>■</span> Stop Mission
               </button>
               <button
                 type="button"

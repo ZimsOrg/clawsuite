@@ -252,6 +252,14 @@ function persistMission(state: PersistedMission): void {
   }
 }
 
+function clearPersistedMission(): void {
+  try {
+    globalThis.localStorage?.removeItem(ACTIVE_MISSION_STORAGE_KEY)
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
 function readContextTokens(session: GatewaySession): number {
   return (
     readNumber(session.contextTokens) ??
@@ -655,6 +663,26 @@ export function useConductorGateway() {
     })
   }, [phase, goal, missionStartedAt, completedAt, missionWorkerKeys, missionWorkerLabels, workerOutputs, streamText, planText, tasks])
 
+  const clearMissionState = () => {
+    doneRef.current = false
+    clearPersistedMission()
+    setPhase('idle')
+    setGoal('')
+    setStreamText('')
+    setPlanText('')
+    setStreamEvents([])
+    setStreamError(null)
+    setTimeoutWarning(false)
+    setMissionStartedAt(null)
+    setCompletedAt(null)
+    setMissionWorkerKeys(new Set())
+    setMissionWorkerLabels(new Set())
+    setWorkerOutputs({})
+    setTasks([])
+    seenToolCallRef.current = false
+    historySavedRef.current = false
+  }
+
   const sendMission = useMutation({
     mutationFn: async (nextGoal: string) => {
       const trimmed = nextGoal.trim()
@@ -715,25 +743,23 @@ export function useConductorGateway() {
   })
 
   const resetMission = () => {
-    doneRef.current = false
+    clearMissionState()
+  }
+
+  const stopMission = async () => {
+    const sessionKeys = [...new Set([...missionWorkerKeys, ...workers.map((worker) => worker.key)])]
+
     try {
-      localStorage.removeItem(ACTIVE_MISSION_STORAGE_KEY)
-    } catch {}
-    setPhase('idle')
-    setGoal('')
-    setStreamText('')
-    setPlanText('')
-    setStreamEvents([])
-    setStreamError(null)
-    setTimeoutWarning(false)
-    setMissionStartedAt(null)
-    setCompletedAt(null)
-    setMissionWorkerKeys(new Set())
-    setMissionWorkerLabels(new Set())
-    setWorkerOutputs({})
-    setTasks([])
-    seenToolCallRef.current = false
-      historySavedRef.current = false
+      await fetch('/api/conductor-stop', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionKeys }),
+      })
+    } catch {
+      // Best effort cleanup.
+    }
+
+    clearMissionState()
   }
 
   const retryMission = async () => {
@@ -764,6 +790,7 @@ export function useConductorGateway() {
     sendMission: sendMission.mutateAsync,
     isSending: sendMission.isPending,
     resetMission,
+    stopMission,
     retryMission,
     refreshWorkers: sessionsQuery.refetch,
     isRefreshingWorkers: sessionsQuery.isFetching,
