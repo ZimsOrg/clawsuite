@@ -12,7 +12,10 @@ const path = require('path');
 
 const PORT = parseInt(process.env.PORT || process.argv.find((_, i, a) => a[i - 1] === '--port') || '3003', 10);
 const DIST_CLIENT = path.join(__dirname, '..', 'dist', 'client');
-const DIST_SERVER = path.join(__dirname, '..', 'dist', 'server', 'server.js');
+// Prefer the self-contained bundle (no node_modules needed), fall back to unbundled
+const BUNDLED_SERVER = path.join(__dirname, 'server-bundle.mjs');
+const UNBUNDLED_SERVER = path.join(__dirname, '..', 'dist', 'server', 'server.js');
+const DIST_SERVER = fs.existsSync(BUNDLED_SERVER) ? BUNDLED_SERVER : UNBUNDLED_SERVER;
 
 const MIME_TYPES = {
   '.html': 'text/html',
