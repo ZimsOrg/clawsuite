@@ -16,7 +16,7 @@ module.exports = {
     'dist/**/*',
     'electron/**/*',
     'assets/**/*',
-    'workspace-daemon/dist/**/*',
+
     '!node_modules',
     '!src',
     '!.git',
