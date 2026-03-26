@@ -15,14 +15,18 @@ module.exports = {
   },
 
   files: [
-    'dist/**/*',
-    'electron/**/*',
+    'dist/client/**/*',
+    'electron/main.cjs',
+    'electron/preload.cjs',
+    'electron/prod-server.cjs',
+    'electron/server-bundle.mjs',
     'assets/**/*',
-
-    '!node_modules',
-    '!src',
-    '!.git',
+    'package.json',
   ],
+
+  // Prevent pnpm node_modules from being bundled
+  npmArgs: ['--ignore-scripts'],
+  nodeGypRebuild: false,
 
   mac: {
     category: 'public.app-category.developer-tools',
