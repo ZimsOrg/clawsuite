@@ -12,9 +12,7 @@
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
-  "engines": {
-    "node": "22.x"
-  },
+
   "scripts": {
     "dev": "NODE_OPTIONS=\"--max-old-space-size=2048\" vite dev --port 3000",
     "build": "vite build",
@@ -84,7 +82,7 @@
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
     "jsdom": "^27.0.0",
-    "nitro": "^2.12.6",
+
     "prettier": "^3.5.3",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2",
